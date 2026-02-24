@@ -1,0 +1,27 @@
+{
+    "terminal.integrated.defaultLocation": "editor",
+    "terminal.integrated.splitCwd": "workspaceRoot",
+    "workbench.editor.openPositioning": "first",
+    "workbench.editor.enablePreview": false,
+    "workbench.editor.enablePreviewFromQuickOpen": false,
+    "terminal.integrated.profiles.windows": {
+        "PowerShell": {
+            "source": "PowerShell",
+            "icon": "terminal-powershell",
+            "args": ["-NoExit", "-Command", "if (Test-Path -Path '.venv\\Scripts\\Activate.ps1') { & '.venv\\Scripts\\Activate.ps1' }"]
+        }
+    },
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+    "terminal.integrated.fontSize": 13,
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "[powershell]": {
+        "files.encoding": "utf8bom"
+    },
+    "terminal.integrated.env.windows": {
+        "PYTHONUTF8": "1"
+    }
+}

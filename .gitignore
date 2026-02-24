@@ -1,0 +1,116 @@
+# === PYTHON ===
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env
+
+# === PROJECT SPECIFIC ===
+# Logs
+/logs/
+logs/
+*.log
+
+# Data directories - conteudo gerado (startup.py cria subpastas em runtime)
+data/**/*
+
+# Databases - SQLite cache files (inclui arquivos WAL mode)
+*.db
+*.db-wal
+*.db-shm
+
+# Python cache (comprehensive)
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Linting and type checking cache
+.mypy_cache/
+.ruff_cache/
+.pytest_cache
+
+# Test coverage reports
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# === MICROSOFT OFFICE ===
+# Temporary Word files
+~$*.docx
+~$*.doc
+*.tmp
+
+# === IDE ===
+# VSCode
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# === SYSTEM ===
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# === SECURITY ===
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# API Keys (backup safety)
+config_local.py
+secrets.json
+
+# === LARGE FILES ===
+# AI Models (coberto por data/**/* acima)
+
+# === UV ===
+# uv cache directory
+.uv/
+
+# === CLAUDE CODE ===
+# Temporary files created by Claude Code CLI
+tmpclaude-*

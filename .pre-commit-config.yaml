@@ -1,0 +1,47 @@
+default_install_hook_types:
+  - pre-commit
+
+repos:
+  - repo: local
+    hooks:
+      - id: auto-init
+        name: Auto-generate __init__.py files
+        entry: python scripts/auto_init.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      - id: validate-structure
+        name: Validate project structure
+        entry: powershell.exe -ExecutionPolicy Bypass -File .vscode/scripts/validate-structure.ps1
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.13
+    hooks:
+      - id: ruff
+        files: ^(src|utils|scripts)/
+        args: ["--config=pyproject.toml", "--fix"]
+      - id: ruff-format
+        files: ^(src|utils|scripts)/
+        args: ["--config=pyproject.toml"]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
+    hooks:
+      - id: mypy
+        pass_filenames: false
+        args: ["--config-file=pyproject.toml", "src", "utils", "scripts"]
+        additional_dependencies:
+          - pydantic==2.12.5
+          - types-PyYAML==6.0.12.20250915
+          - types-requests==2.32.4.20260107
+          - types-psutil==7.2.1.20260116
+          - python-dotenv==1.2.1
+          - fastapi==0.128.0
+          - arq==0.26.3
+          - redis==5.3.1

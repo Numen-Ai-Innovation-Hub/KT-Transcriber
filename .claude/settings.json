@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Numen/AI Innovation Hub/**)",
+      "Bash(dir:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv add:*)",
+      "Bash(uv lock:*)",
+      "Bash(uv run python -m pytest:*)",
+      "Bash(.venv/Scripts/ruff.exe check:*)",
+      "Bash(.venv/Scripts/ruff.exe format:*)",
+      "Bash(.venv/Scripts/mypy.exe:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git branch:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)",
+      "Bash(curl -s:*)",
+      "Bash(wc:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:docs.astral.sh)",
+      "WebFetch(domain:fastapi.tiangolo.com)"
+    ]
+  }
+}
