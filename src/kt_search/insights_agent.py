@@ -2,6 +2,7 @@
 Insights Agent - Agente que extrai insights diretos baseados nos resultados da busca semântica
 Analisa contextos encontrados e gera insights objetivos para responder perguntas
 """
+
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -45,6 +46,7 @@ class InsightsAgent:
         """
         if openai_client is None:
             from src.config.settings import OPENAI_API_KEY
+
             openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
         self.openai_client = openai_client
         self.model = "gpt-4o-mini"
@@ -116,9 +118,7 @@ class InsightsAgent:
         try:
             start_time = time.time()
             suffix = "..." if len(original_query) > 100 else ""
-            logger.info(
-                f"Iniciando extração de insights para: '{original_query[:100]}{suffix}'"
-            )
+            logger.info(f"Iniciando extração de insights para: '{original_query[:100]}{suffix}'")
 
             # 1. Analisar relevância contextual dos resultados
             context_analysis = self._analyze_context_relevance(original_query, search_results)
@@ -919,9 +919,7 @@ class InsightsAgent:
                     f"🎯 TEMPLATE DETECTION: Query clara de metadata listing detectada: '{query_lower[:50]}...'"
                 )
                 regex_match = any(re.search(pattern, query_lower) for pattern in flexible_patterns)
-                logger.info(
-                    f"   📊 Score: {listing_score}, Legacy: {any(legacy_patterns)}, Regex: {regex_match}"
-                )
+                logger.info(f"   📊 Score: {listing_score}, Legacy: {any(legacy_patterns)}, Regex: {regex_match}")
                 return "metadata_listing"
             elif is_specific_kt_analysis:
                 logger.info("🔍 SPECIFIC KT ANALYSIS: Detectada análise específica - usando LLM em vez de fast-track")
@@ -1808,8 +1806,7 @@ porém nos vídeos de KT do cliente **{found_client}**, não do **{requested_cli
                         return True
 
             logger.info(
-                f"🔍 Cliente '{client_name}' não encontrado na base."
-                f" Disponíveis: {list(available_clients.keys())}"
+                f"🔍 Cliente '{client_name}' não encontrado na base. Disponíveis: {list(available_clients.keys())}"
             )
             return False
 

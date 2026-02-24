@@ -593,7 +593,7 @@ class IndexingEngine:
             text = str(text)
         try:
             normalized = unicodedata.normalize("NFKC", text)
-            normalized = normalized.replace("\uFFFD", "?")
+            normalized = normalized.replace("\ufffd", "?")
             normalized = normalized.encode("utf-8", errors="replace").decode("utf-8")
             return normalized
         except Exception as e:

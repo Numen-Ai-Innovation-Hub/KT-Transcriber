@@ -1498,8 +1498,7 @@ class SearchEngine:
                 "video_name": metadata.get("video_name", "Unknown"),
                 "speaker": metadata.get("speaker", "Unknown"),
                 "timestamp": (
-                    f"{metadata.get('start_time_formatted', '00:00')}"
-                    f"-{metadata.get('end_time_formatted', '00:00')}"
+                    f"{metadata.get('start_time_formatted', '00:00')}-{metadata.get('end_time_formatted', '00:00')}"
                 ),
                 "quality_score": chunk.get("quality_score", 0.0),
                 "relevance_reason": f"Qualidade: {chunk.get('quality_score', 0.0):.2f}",
@@ -1883,7 +1882,7 @@ class SearchEngine:
                 logger.debug("   🔍 Fallback: Consultando ChromaDB diretamente...")
 
             logger.debug("   📤 Resultado: Metadados de contexto client enrichment aplicado")
-            _perf = ('Rápido' if client_time < 1.0 else 'Normal' if client_time < 3.0 else 'Lento')
+            _perf = "Rápido" if client_time < 1.0 else "Normal" if client_time < 3.0 else "Lento"
             logger.debug(f"   ⚡ Performance: {client_time:.3f}s ({_perf})")
 
         else:
@@ -2162,4 +2161,3 @@ def quick_search(query: str) -> dict[str, Any]:
     """Quick search returning only the intelligent response"""
     response = search_kt_knowledge(query)
     return response.intelligent_response
-

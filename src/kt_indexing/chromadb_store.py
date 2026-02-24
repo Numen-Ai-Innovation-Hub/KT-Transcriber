@@ -15,7 +15,7 @@ import chromadb
 import openai
 from chromadb.api.types import Include, PyEmbeddings
 
-from src.config.settings import CHROMA_COLLECTION_NAME, DIRECTORY_PATHS, OPENAI_API_KEY, OPENAI_EMBEDDING_MODEL
+from src.config.settings import DIRECTORY_PATHS, OPENAI_API_KEY
 from src.kt_indexing.kt_indexing_constants import CHROMADB_CONFIG, OPENAI_CONFIG
 from utils.logger_setup import LoggerManager
 
@@ -460,9 +460,7 @@ class ChromaDBStore:
             if include_content:
                 include_fields_get.append("documents")
 
-            results = self.collection.get(
-                where=where_filter, limit=limit, include=include_fields_get
-            )
+            results = self.collection.get(where=where_filter, limit=limit, include=include_fields_get)
 
             ids_list = results["ids"] or []
             metas_list = results["metadatas"] or []
@@ -489,9 +487,7 @@ class ChromaDBStore:
             logger.error(f"Busca por metadados falhou: {e}")
             return {"results": [], "total_found": 0, "error": str(e)}
 
-    def similarity_search(
-        self, query_text: str, limit: int = 10, filters: dict | None = None
-    ) -> list[dict[str, Any]]:
+    def similarity_search(self, query_text: str, limit: int = 10, filters: dict | None = None) -> list[dict[str, Any]]:
         """Busca por similaridade usando texto (gera embedding internamente).
 
         Args:
@@ -526,12 +522,14 @@ class ChromaDBStore:
                 raw_metas_sim = results["metadatas"]
                 metas_row = raw_metas_sim[0] if raw_metas_sim else []
                 for i in range(len(ids_row)):
-                    formatted_results.append({
-                        "chunk_id": ids_row[i],
-                        "content": docs_row[i],
-                        "similarity_score": 1 - dists_row[i],
-                        "metadata": metas_row[i] if metas_row else {},
-                    })
+                    formatted_results.append(
+                        {
+                            "chunk_id": ids_row[i],
+                            "content": docs_row[i],
+                            "similarity_score": 1 - dists_row[i],
+                            "metadata": metas_row[i] if metas_row else {},
+                        }
+                    )
 
             return formatted_results
 
@@ -557,9 +555,7 @@ class ChromaDBStore:
                 raw = self.collection.get(limit=limit, include=include_meta)
                 return self._post_process_temporal_results(dict(raw), filters)
 
-            results = self.collection.get(
-                where=processed_filters, limit=limit, include=include_meta
-            )
+            results = self.collection.get(where=processed_filters, limit=limit, include=include_meta)
 
             ids_list = results["ids"] or []
             docs_list = results["documents"] or []
@@ -567,11 +563,13 @@ class ChromaDBStore:
 
             formatted_results = []
             for i in range(len(ids_list)):
-                formatted_results.append({
-                    "chunk_id": ids_list[i],
-                    "content": docs_list[i],
-                    "metadata": metas_list[i] if metas_list else {},
-                })
+                formatted_results.append(
+                    {
+                        "chunk_id": ids_list[i],
+                        "content": docs_list[i],
+                        "metadata": metas_list[i] if metas_list else {},
+                    }
+                )
 
             return formatted_results
 
@@ -701,7 +699,11 @@ class ChromaDBStore:
                     continue
 
                 client_name_raw = metadata.get("client_name")
-                if not isinstance(client_name_raw, str) or not client_name_raw or client_name_raw == "CLIENTE_DESCONHECIDO":
+                if (
+                    not isinstance(client_name_raw, str)
+                    or not client_name_raw
+                    or client_name_raw == "CLIENTE_DESCONHECIDO"
+                ):
                     continue
                 client_name = client_name_raw
 
@@ -818,10 +820,12 @@ class ChromaDBStore:
                             break
 
             if include_result:
-                formatted_results.append({
-                    "chunk_id": results["ids"][i],
-                    "content": results["documents"][i] if results.get("documents") else "",
-                    "metadata": metadata,
-                })
+                formatted_results.append(
+                    {
+                        "chunk_id": results["ids"][i],
+                        "content": results["documents"][i] if results.get("documents") else "",
+                        "metadata": metadata,
+                    }
+                )
 
         return formatted_results

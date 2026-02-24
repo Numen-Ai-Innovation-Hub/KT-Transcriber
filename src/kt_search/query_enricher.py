@@ -98,8 +98,7 @@ class QueryEnricher:
             )
 
             logger.info(
-                f"Query enriquecida em {processing_time:.3f}s — "
-                f"entidades: {len(entities)}, confiança: {confidence:.2f}"
+                f"Query enriquecida em {processing_time:.3f}s — entidades: {len(entities)}, confiança: {confidence:.2f}"
             )
 
             return result

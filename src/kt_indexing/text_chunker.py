@@ -131,7 +131,7 @@ class TextChunker:
                 # Iniciar novo chunk com sobreposição
                 if len(current_chunk) > self.overlap_chars:
                     # Pegar últimos overlap_chars como início do próximo chunk
-                    overlap_text = current_chunk[-self.overlap_chars:]
+                    overlap_text = current_chunk[-self.overlap_chars :]
                     current_chunk = overlap_text + " " + sentence
                 else:
                     current_chunk = sentence

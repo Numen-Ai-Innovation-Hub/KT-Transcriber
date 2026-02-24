@@ -568,7 +568,7 @@ class ChunkSelector:
                 diversity_score=1.0 - (i / len(selected_chunks)),  # Earlier selection = higher diversity
                 combined_score=chunk.get("quality_score", 0.0) * 0.7 + (1.0 - i / len(selected_chunks)) * 0.3,
                 selection_reason=(
-                    f"Quality: {chunk.get('quality_score', 0):.2f}, Position: {i+1}/{len(selected_chunks)}"
+                    f"Quality: {chunk.get('quality_score', 0):.2f}, Position: {i + 1}/{len(selected_chunks)}"
                 ),
             )
             chunk_scores.append(chunk_score)

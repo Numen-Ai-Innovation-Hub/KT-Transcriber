@@ -69,9 +69,7 @@ class SmartMeetingProcessor:
 
         return immediate_data
 
-    def _process_immediate_data(
-        self, meeting_id: str, client_name: str, video_name: str | None
-    ) -> dict[str, Any]:
+    def _process_immediate_data(self, meeting_id: str, client_name: str, video_name: str | None) -> dict[str, Any]:
         """Obtém dados imediatamente disponíveis da reunião.
 
         Args:
@@ -103,9 +101,7 @@ class SmartMeetingProcessor:
             if meeting.status == MeetingStatus.COMPLETED:
                 immediate_data = self._enrich_with_full_data(meeting_id, immediate_data)
 
-            logger.info(
-                f"Dados imediatos obtidos para '{resolved_name}' — status: {meeting.status.value}"
-            )
+            logger.info(f"Dados imediatos obtidos para '{resolved_name}' — status: {meeting.status.value}")
             return immediate_data
 
         except Exception as e:
@@ -141,9 +137,7 @@ class SmartMeetingProcessor:
             data["total_highlights"] = len(highlights)
             data["is_complete"] = True
 
-            logger.info(
-                f"Dados completos obtidos — {len(transcript)} segmentos, {len(highlights)} highlights"
-            )
+            logger.info(f"Dados completos obtidos — {len(transcript)} segmentos, {len(highlights)} highlights")
         except Exception as e:
             logger.error(f"Erro ao enriquecer dados completos da reunião {meeting_id}: {e}")
 
