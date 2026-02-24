@@ -100,7 +100,7 @@ class TextChunker:
         Returns:
             Lista de ChunkPart.
         """
-        parts = []
+        parts: list[ChunkPart] = []
         current_chunk = ""
         char_offset = 0
 

@@ -9,10 +9,11 @@ Eliminado: from chromadb.config import Settings (deprecated).
 
 import time
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import chromadb
 import openai
+from chromadb.api.types import Include, PyEmbeddings
 
 from src.config.settings import CHROMA_COLLECTION_NAME, DIRECTORY_PATHS, OPENAI_API_KEY, OPENAI_EMBEDDING_MODEL
 from src.kt_indexing.kt_indexing_constants import CHROMADB_CONFIG, OPENAI_CONFIG
@@ -274,7 +275,7 @@ class ChromaDBStore:
             logger.error(f"Falha ao inicializar ChromaDB client: {e}")
             raise
 
-    def _get_or_create_collection(self):
+    def _get_or_create_collection(self) -> chromadb.Collection:
         """Obtém coleção existente ou cria uma nova."""
         collection_name = self.config["collection_name"]
         try:
@@ -322,7 +323,7 @@ class ChromaDBStore:
             self.collection.add(
                 ids=[chunk_id],
                 documents=[content],
-                embeddings=[embedding],
+                embeddings=cast(PyEmbeddings, [embedding]),
                 metadatas=[clean_metadata],
             )
 
@@ -366,7 +367,10 @@ class ChromaDBStore:
                     metadatas.append(clean_metadata)
 
                 self.collection.add(
-                    ids=ids, documents=documents, embeddings=embeddings, metadatas=metadatas
+                    ids=ids,
+                    documents=documents,
+                    embeddings=cast(PyEmbeddings, embeddings),
+                    metadatas=metadatas,  # type: ignore[arg-type]
                 )
                 success_count += len(batch)
                 logger.info(f"Batch {i // batch_size + 1}: {len(batch)} chunks adicionados")
@@ -396,26 +400,32 @@ class ChromaDBStore:
             Dict com resultados e estatísticas.
         """
         try:
-            include_fields = ["documents", "distances"]
+            include_fields: Include = ["documents", "distances"]
             if include_metadata:
                 include_fields.append("metadatas")
 
             results = self.collection.query(
-                query_embeddings=[query_embedding],
+                query_embeddings=cast(PyEmbeddings, [query_embedding]),
                 n_results=limit,
                 where=where_filter,
                 include=include_fields,
             )
 
+            ids_list = results["ids"][0] if results["ids"] else []
+            docs_list = results["documents"][0] if results["documents"] else []
+            dists_list = results["distances"][0] if results["distances"] else []
+            raw_metas = results["metadatas"]
+            metas_list = raw_metas[0] if raw_metas else []
+
             formatted_results = []
-            for i in range(len(results["ids"][0])):
+            for i in range(len(ids_list)):
                 result: dict[str, Any] = {
-                    "chunk_id": results["ids"][0][i],
-                    "content": results["documents"][0][i],
-                    "similarity_score": 1 - results["distances"][0][i],
+                    "chunk_id": ids_list[i],
+                    "content": docs_list[i],
+                    "similarity_score": 1 - dists_list[i],
                 }
-                if include_metadata and "metadatas" in results:
-                    result["metadata"] = results["metadatas"][0][i]
+                if include_metadata and metas_list:
+                    result["metadata"] = metas_list[i]
                 formatted_results.append(result)
 
             return {
@@ -446,22 +456,26 @@ class ChromaDBStore:
             Dict com resultados e estatísticas.
         """
         try:
-            include_fields = ["metadatas"]
+            include_fields_get: Include = ["metadatas"]
             if include_content:
-                include_fields.append("documents")
+                include_fields_get.append("documents")
 
             results = self.collection.get(
-                where=where_filter, limit=limit, include=include_fields
+                where=where_filter, limit=limit, include=include_fields_get
             )
 
+            ids_list = results["ids"] or []
+            metas_list = results["metadatas"] or []
+            docs_list = results["documents"] or []
+
             formatted_results = []
-            for i in range(len(results["ids"])):
+            for i in range(len(ids_list)):
                 result: dict[str, Any] = {
-                    "chunk_id": results["ids"][i],
-                    "metadata": results["metadatas"][i] if "metadatas" in results else {},
+                    "chunk_id": ids_list[i],
+                    "metadata": metas_list[i] if metas_list else {},
                 }
-                if include_content and "documents" in results:
-                    result["content"] = results["documents"][i]
+                if include_content and docs_list:
+                    result["content"] = docs_list[i]
                 formatted_results.append(result)
 
             return {
@@ -496,21 +510,27 @@ class ChromaDBStore:
                 logger.error("Falha ao gerar embedding de query válido")
                 return []
 
+            include_sim: Include = ["documents", "distances", "metadatas"]
             results = self.collection.query(
-                query_embeddings=[query_embedding],
+                query_embeddings=cast(PyEmbeddings, [query_embedding]),
                 n_results=limit,
                 where=filters,
-                include=["documents", "distances", "metadatas"],
+                include=include_sim,
             )
 
             formatted_results = []
             if results.get("ids") and len(results["ids"]) > 0:
-                for i in range(len(results["ids"][0])):
+                ids_row = results["ids"][0]
+                docs_row = results["documents"][0] if results["documents"] else []
+                dists_row = results["distances"][0] if results["distances"] else []
+                raw_metas_sim = results["metadatas"]
+                metas_row = raw_metas_sim[0] if raw_metas_sim else []
+                for i in range(len(ids_row)):
                     formatted_results.append({
-                        "chunk_id": results["ids"][0][i],
-                        "content": results["documents"][0][i],
-                        "similarity_score": 1 - results["distances"][0][i],
-                        "metadata": results.get("metadatas", [{}])[0][i] if results.get("metadatas") else {},
+                        "chunk_id": ids_row[i],
+                        "content": docs_row[i],
+                        "similarity_score": 1 - dists_row[i],
+                        "metadata": metas_row[i] if metas_row else {},
                     })
 
             return formatted_results
@@ -531,21 +551,26 @@ class ChromaDBStore:
         """
         try:
             processed_filters = self._process_temporal_filters(filters)
+            include_meta: Include = ["documents", "metadatas"]
 
             if processed_filters is None:
-                results = self.collection.get(limit=limit, include=["documents", "metadatas"])
-                return self._post_process_temporal_results(results, filters)
+                raw = self.collection.get(limit=limit, include=include_meta)
+                return self._post_process_temporal_results(dict(raw), filters)
 
             results = self.collection.get(
-                where=processed_filters, limit=limit, include=["documents", "metadatas"]
+                where=processed_filters, limit=limit, include=include_meta
             )
 
+            ids_list = results["ids"] or []
+            docs_list = results["documents"] or []
+            metas_list = results["metadatas"] or []
+
             formatted_results = []
-            for i in range(len(results["ids"])):
+            for i in range(len(ids_list)):
                 formatted_results.append({
-                    "chunk_id": results["ids"][i],
-                    "content": results["documents"][i],
-                    "metadata": results.get("metadatas", [{}])[i] if results.get("metadatas") else {},
+                    "chunk_id": ids_list[i],
+                    "content": docs_list[i],
+                    "metadata": metas_list[i] if metas_list else {},
                 })
 
             return formatted_results
@@ -603,12 +628,13 @@ class ChromaDBStore:
             metadata_fields: set[str] = set()
             clients: set[str] = set()
 
-            if sample_results.get("metadatas"):
-                for metadata in sample_results["metadatas"]:
-                    if metadata:
-                        metadata_fields.update(metadata.keys())
-                        if "client_name" in metadata:
-                            clients.add(metadata["client_name"])
+            raw_sample_metas = sample_results["metadatas"]
+            for metadata in raw_sample_metas or []:
+                if metadata:
+                    metadata_fields.update(k for k in metadata.keys() if isinstance(k, str))
+                    client_val = metadata.get("client_name")
+                    if isinstance(client_val, str) and client_val:
+                        clients.add(client_val)
 
             return {
                 "total_documents": count,
@@ -638,11 +664,12 @@ class ChromaDBStore:
             Lista de valores únicos.
         """
         try:
-            results = self.collection.get(limit=1000, include=["metadatas"])
+            include_only_meta: Include = ["metadatas"]
+            results = self.collection.get(limit=1000, include=include_only_meta)
             distinct_values: set[str] = set()
 
             if results.get("metadatas"):
-                for metadata in results["metadatas"]:
+                for metadata in results["metadatas"] or []:
                     if metadata and field_name in metadata:
                         value = metadata[field_name]
                         if isinstance(value, str) and value:
@@ -661,20 +688,22 @@ class ChromaDBStore:
             Lista de dicionários com dados agregados por cliente.
         """
         try:
-            results = self.collection.get(include=["metadatas"])
+            include_clients: Include = ["metadatas"]
+            results = self.collection.get(include=include_clients)
 
             if not results.get("metadatas"):
                 return []
 
             clients_data: dict[str, dict[str, Any]] = {}
 
-            for metadata in results["metadatas"]:
+            for metadata in results["metadatas"] or []:
                 if not metadata:
                     continue
 
-                client_name = metadata.get("client_name")
-                if not client_name or client_name == "CLIENTE_DESCONHECIDO":
+                client_name_raw = metadata.get("client_name")
+                if not isinstance(client_name_raw, str) or not client_name_raw or client_name_raw == "CLIENTE_DESCONHECIDO":
                     continue
+                client_name = client_name_raw
 
                 if client_name not in clients_data:
                     clients_data[client_name] = {

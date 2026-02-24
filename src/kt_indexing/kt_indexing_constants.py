@@ -4,13 +4,15 @@ Consolida configurações de chunking, metadados e indexação ChromaDB.
 Unifica src/core/processing/config.py + src/core/indexing/config.py do projeto legado.
 """
 
+from typing import Any
+
 from src.config.settings import CHROMA_COLLECTION_NAME, DIRECTORY_PATHS, OPENAI_EMBEDDING_MODEL, OPENAI_MODEL
 
 # ════════════════════════════════════════════════════════════════════════════
 # CHUNK CONFIGURATION
 # ════════════════════════════════════════════════════════════════════════════
 
-CHUNK_CONFIG = {
+CHUNK_CONFIG: dict[str, Any] = {
     "max_chars": 1000,
     "overlap_chars": 200,
     "min_chars": 50,
@@ -27,7 +29,7 @@ SENTENCE_PATTERNS = [
 # LLM CONFIGURATION
 # ════════════════════════════════════════════════════════════════════════════
 
-LLM_CONFIG = {
+LLM_CONFIG: dict[str, Any] = {
     "model": OPENAI_MODEL,
     "max_retries": 3,
     "max_tokens": 1000,
@@ -63,7 +65,7 @@ Responda APENAS com as variáveis Python acima, sem explicações extras."""
 # CHROMADB CONFIGURATION
 # ════════════════════════════════════════════════════════════════════════════
 
-CHROMADB_CONFIG = {
+CHROMADB_CONFIG: dict[str, Any] = {
     "persist_directory": str(DIRECTORY_PATHS["vector_db"]),
     "collection_name": CHROMA_COLLECTION_NAME,
     "embedding_dimensions": 1536,
@@ -76,7 +78,7 @@ CHROMADB_CONFIG = {
 # OPENAI EMBEDDING CONFIGURATION
 # ════════════════════════════════════════════════════════════════════════════
 
-OPENAI_CONFIG = {
+OPENAI_CONFIG: dict[str, Any] = {
     "model": OPENAI_EMBEDDING_MODEL,
     "dimensions": 1536,
     "max_retries": 3,
@@ -88,7 +90,7 @@ OPENAI_CONFIG = {
 # FILE GENERATION CONFIGURATION
 # ════════════════════════════════════════════════════════════════════════════
 
-FILE_CONFIG = {
+FILE_CONFIG: dict[str, Any] = {
     "encoding": "utf-8",
     "extension": ".txt",
     "max_filename_length": 200,
@@ -99,7 +101,7 @@ FILE_CONFIG = {
 # VALIDATION RULES
 # ════════════════════════════════════════════════════════════════════════════
 
-VALIDATION_RULES = {
+VALIDATION_RULES: dict[str, Any] = {
     "min_content_length": 10,
     "max_content_length": 10000,
     "required_sections": ["TLDV", "CUSTOMIZADOS", "CHUNK"],
@@ -140,18 +142,18 @@ VALIDATION_RULES = {
     "max_chunk_length": 1000,
 }
 
-METADATA_LIMITS = {
+METADATA_LIMITS: dict[str, Any] = {
     "max_list_items": 20,
     "max_string_length": 500,
     "max_tags": 15,
 }
 
-VALID_ENUMS = {
+VALID_ENUMS: dict[str, Any] = {
     "meeting_phase": ["apresentacao", "demo", "discussao", "qa", "encerramento", "unknown"],
     "kt_type": ["sustentacao", "implementacao", "treinamento", "migracao", "integracao", "outro", "unknown"],
 }
 
-METADATA_DEFAULTS = {
+METADATA_DEFAULTS: dict[str, Any] = {
     "meeting_phase": "unknown",
     "kt_type": "unknown",
     "sap_modules": [],

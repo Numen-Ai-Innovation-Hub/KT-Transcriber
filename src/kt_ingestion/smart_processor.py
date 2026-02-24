@@ -235,7 +235,9 @@ class SmartMeetingProcessor:
         """
         new_segments = len(new_data.get("transcript", []))
         existing_segments = len(existing_data.get("transcript", []))
-        return new_segments > existing_segments or (new_data.get("is_complete") and not existing_data.get("is_complete"))
+        return bool(
+            new_segments > existing_segments or (new_data.get("is_complete") and not existing_data.get("is_complete"))
+        )
 
     def _normalize_video_name(self, name: str) -> str:
         """Normaliza nome do vídeo para uso interno.

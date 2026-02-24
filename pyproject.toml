@@ -95,6 +95,9 @@ select = ["E", "F", "B", "I", "UP"]
 ignore = ["B008"]  # Allows Depends() in function defaults (FastAPI pattern)
 exclude = [".git", ".venv", "__pycache__", "build", "dist", "**/__init__.py"]
 
+[tool.ruff.lint.per-file-ignores]
+"scripts/*.py" = ["E402"]  # Scripts precisam de sys.path.insert antes dos imports de domínio
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
