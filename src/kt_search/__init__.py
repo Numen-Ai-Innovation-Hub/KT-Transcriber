@@ -1,5 +1,8 @@
 """kt_search package."""
 
+# ChromaDB Search Executor
+from .chromadb_search_executor import ChromaDBSearchExecutor
+
 # Chunk Selector
 from .chunk_selector import (
     ChunkScore,
@@ -30,10 +33,10 @@ from .kt_search_constants import (
     PERFORMANCE_CONFIG,
     QUALITY_WEIGHTS,
     QUERY_PATTERNS,
-    RAGPipelineTemplates,
     SEARCH_CONFIG,
     TOP_K_STRATEGY,
     VALIDATION_METRICS,
+    RAGPipelineTemplates,
 )
 
 # Query Classifier
@@ -53,6 +56,13 @@ from .query_enricher import (
     extract_entities,
 )
 
+# Search CLI
+from .search_cli import (
+    interactive_mode,
+    main,
+    single_query_mode,
+)
+
 # Search Engine
 from .search_engine import (
     SearchEngine,
@@ -68,17 +78,11 @@ from .search_formatters import (
     search_kt_knowledge,
 )
 
-# Search CLI
-from .search_cli import (
-    interactive_mode,
-    main,
-    single_query_mode,
-)
-
 # Search Utils
 from .search_utils import analyze_query_complexity
 
 __all__ = [
+    "ChromaDBSearchExecutor",
     "ChunkScore",
     "ChunkSelector",
     "ClassificationResult",

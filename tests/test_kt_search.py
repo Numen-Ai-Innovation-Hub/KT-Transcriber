@@ -346,9 +346,9 @@ class TestSearchEngineSearchMethod:
         engine.chunk_selector.select_intelligent_chunks.return_value = selection
         engine.dynamic_client_manager = MagicMock()
         engine.chromadb_manager = MagicMock()
-        engine.chromadb_manager.search_similar_chunks.return_value = make_raw_chunk_result(n=2)
         engine.embedding_generator = MagicMock()
-        engine.embedding_generator.generate_chunk_embedding.return_value = [0.1] * 1536
+        engine._chromadb_executor = MagicMock()
+        engine._chromadb_executor.execute_search.return_value = []
         engine.insights_agent = MagicMock()
         engine.insights_agent.generate_insights.return_value = {
             "response": "Resposta gerada.", "sources": [], "confidence": 0.9
