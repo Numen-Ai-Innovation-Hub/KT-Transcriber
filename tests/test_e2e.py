@@ -4,7 +4,6 @@ Execução: uv run python -m pytest tests/ -m e2e
 Requer: FastAPI + Redis Cloud + ARQ Worker rodando simultaneamente
 """
 
-
 from collections.abc import Generator
 
 import pytest

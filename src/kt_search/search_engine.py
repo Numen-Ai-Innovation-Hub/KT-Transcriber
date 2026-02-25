@@ -191,9 +191,7 @@ class SearchEngine:
                     discovered_clients = list(discovery.keys())
                 except Exception as e:
                     logger.warning(f"Não foi possível descobrir clientes para resposta de erro: {e}")
-                return self._response_builder.create_client_not_found_response(
-                    query, start_time, discovered_clients
-                )
+                return self._response_builder.create_client_not_found_response(query, start_time, discovered_clients)
 
             # PHASE 3: ChromaDB Search
             chromadb_start = time.time()
@@ -219,9 +217,7 @@ class SearchEngine:
                 client_time = time.time() - client_start
 
                 # Rich client discovery logging
-                self._pipeline_logger.log_client_discovery_phase(
-                    client_time, show_details, self.dynamic_client_manager
-                )
+                self._pipeline_logger.log_client_discovery_phase(client_time, show_details, self.dynamic_client_manager)
 
             # PHASE 5: Intelligent Chunk Selection
             selection_start = time.time()
@@ -255,9 +251,7 @@ class SearchEngine:
             insights_time = time.time() - insights_start
 
             if not insights_result:
-                return self._response_builder.create_error_response(
-                    "Failed to generate insights", query, start_time
-                )
+                return self._response_builder.create_error_response("Failed to generate insights", query, start_time)
 
             # Rich insights logging
             self._pipeline_logger.log_insights_phase(insights_result, insights_time, show_details)

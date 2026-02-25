@@ -118,9 +118,32 @@ def extract_sap_modules_from_title(title: str) -> list[str]:
         Lista de módulos SAP detectados.
     """
     known_modules = [
-        "MM", "SD", "FI", "CO", "HR", "PP", "PM", "QM", "WM", "EWM",
-        "TM", "GTS", "LE", "PS", "RE", "RM", "SM", "SRM", "CRM",
-        "BW", "BI", "BTP", "ABAP", "FIORI", "CPI", "IFLOW",
+        "MM",
+        "SD",
+        "FI",
+        "CO",
+        "HR",
+        "PP",
+        "PM",
+        "QM",
+        "WM",
+        "EWM",
+        "TM",
+        "GTS",
+        "LE",
+        "PS",
+        "RE",
+        "RM",
+        "SM",
+        "SRM",
+        "CRM",
+        "BW",
+        "BI",
+        "BTP",
+        "ABAP",
+        "FIORI",
+        "CPI",
+        "IFLOW",
     ]
     title_upper = title.upper()
     found = []

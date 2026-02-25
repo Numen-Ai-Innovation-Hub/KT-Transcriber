@@ -45,6 +45,19 @@ class KTSearchService:
     # OPERAÇÕES PÚBLICAS
     # ────────────────────────────────────────────────────────────────────────
 
+    @property
+    def components(self) -> dict[str, Any]:
+        """Expõe componentes do pipeline para as ARQ tasks de busca."""
+        return {
+            "query_enricher": self._engine.query_enricher,
+            "query_classifier": self._engine.query_classifier,
+            "chromadb_executor": self._engine._chromadb_executor,
+            "dynamic_client_manager": self._engine.dynamic_client_manager,
+            "chunk_selector": self._engine.chunk_selector,
+            "insights_agent": self._engine.insights_agent,
+            "response_builder": self._engine._response_builder,
+        }
+
     def search(self, query: str) -> dict[str, Any]:
         """Executa busca KT via pipeline RAG.
 

@@ -33,7 +33,9 @@ def make_response(
             "details": "",
         },
         contexts=contexts if contexts is not None else [],
-        summary_stats=summary_stats if summary_stats is not None else {
+        summary_stats=summary_stats
+        if summary_stats is not None
+        else {
             "chunks_selected": 3,
             "selection_strategy": "quality_diversity",
             "total_chunks_found": 10,
@@ -106,9 +108,7 @@ class TestFormataResultadoTeams:
         """Quando answer está preenchido, seção INSIGHTS aparece com o conteúdo."""
         from src.kt_search.search_formatters import formatar_resultado_teams
 
-        result = formatar_resultado_teams(
-            make_response(answer="O módulo FI é responsável por finanças."), "pergunta"
-        )
+        result = formatar_resultado_teams(make_response(answer="O módulo FI é responsável por finanças."), "pergunta")
         assert "INSIGHTS" in result
         assert "O módulo FI" in result
 
@@ -139,9 +139,7 @@ class TestFormataResultadoTeams:
         """Seção MÉTRICAS DE BUSCA é incluída quando summary_stats não está vazio."""
         from src.kt_search.search_formatters import formatar_resultado_teams
 
-        result = formatar_resultado_teams(
-            make_response(summary_stats={"chunks_selected": 5}), "pergunta"
-        )
+        result = formatar_resultado_teams(make_response(summary_stats={"chunks_selected": 5}), "pergunta")
         assert "MÉTRICAS DE BUSCA" in result
 
     def test_link_original_url_aparece_no_resultado(self) -> None:

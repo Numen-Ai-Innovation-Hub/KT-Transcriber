@@ -67,9 +67,7 @@ class InsightProcessors:
                 "video_frequency": video_frequency,
                 "client_mentions": client_mentions,
             },
-            "confidence": (
-                min(1.0, max(video_frequency.values()) / len(search_results)) if video_frequency else 0.0
-            ),
+            "confidence": (min(1.0, max(video_frequency.values()) / len(search_results)) if video_frequency else 0.0),
         }
 
     def determine_primary_theme(self, query: str, results: list[Any], dominant_client: str | None) -> str:
@@ -135,18 +133,56 @@ class InsightProcessors:
         query_lower = query.lower()
 
         stop_words = {
-            "o", "a", "os", "as", "um", "uma", "uns", "umas", "de", "do", "da", "dos", "das",
-            "em", "no", "na", "nos", "nas", "por", "para", "com", "sem", "sobre", "que", "qual",
-            "quais", "quando", "onde", "como", "quem", "temos", "tem", "há", "foi", "foram",
-            "é", "são", "estar", "esta", "este", "estes", "estas", "ser", "sido",
+            "o",
+            "a",
+            "os",
+            "as",
+            "um",
+            "uma",
+            "uns",
+            "umas",
+            "de",
+            "do",
+            "da",
+            "dos",
+            "das",
+            "em",
+            "no",
+            "na",
+            "nos",
+            "nas",
+            "por",
+            "para",
+            "com",
+            "sem",
+            "sobre",
+            "que",
+            "qual",
+            "quais",
+            "quando",
+            "onde",
+            "como",
+            "quem",
+            "temos",
+            "tem",
+            "há",
+            "foi",
+            "foram",
+            "é",
+            "são",
+            "estar",
+            "esta",
+            "este",
+            "estes",
+            "estas",
+            "ser",
+            "sido",
         }
 
         words = re.findall(r"\b[a-záàâãéêíóôõúç]{3,}\b", query_lower)
         keywords = [word for word in words if word not in stop_words]
 
-        technical_terms = [
-            "integração", "integrações", "cpi", "kt", "fiori", "mm", "sd", "fi", "co", "abap", "btp"
-        ]
+        technical_terms = ["integração", "integrações", "cpi", "kt", "fiori", "mm", "sd", "fi", "co", "abap", "btp"]
         for term in technical_terms:
             if term in query_lower and term not in keywords:
                 keywords.append(term)
@@ -286,9 +322,7 @@ class InsightProcessors:
     # Scoring de relevância
     # ════════════════════════════════════════════════════════════════════════
 
-    def calculate_semantic_relevance(
-        self, content: str, query_keywords: list[str], original_query: str
-    ) -> float:
+    def calculate_semantic_relevance(self, content: str, query_keywords: list[str], original_query: str) -> float:
         """
         Calcula relevância semântica entre conteúdo e query original.
 
@@ -313,8 +347,16 @@ class InsightProcessors:
 
         if any(term in original_query_lower for term in ["integração", "integrações", "integrar"]):
             integration_terms = [
-                "integração", "integrações", "cpi", "api", "interface",
-                "conectores", "btp", "j1b-tax", "j1b", "tax",
+                "integração",
+                "integrações",
+                "cpi",
+                "api",
+                "interface",
+                "conectores",
+                "btp",
+                "j1b-tax",
+                "j1b",
+                "tax",
             ]
             integration_matches = sum(1 for term in integration_terms if term in content_lower)
             context_score = min(1.0, integration_matches / 3) * 0.35
@@ -322,8 +364,7 @@ class InsightProcessors:
             if any(term in content_lower for term in ["j1b-tax", "j1b", "cpi", "api"]) and integration_matches > 0:
                 context_score *= 1.2
             elif (
-                any(term in content_lower for term in ["fiscal", "tributário", "imposto"])
-                and integration_matches == 0
+                any(term in content_lower for term in ["fiscal", "tributário", "imposto"]) and integration_matches == 0
             ):
                 context_score *= 0.5
 
@@ -431,8 +472,13 @@ class InsightProcessors:
             if any(
                 word in insight.lower()
                 for word in [
-                    "decidido", "aprovado", "problema", "solução",
-                    "insight", "descoberto", "identificado",
+                    "decidido",
+                    "aprovado",
+                    "problema",
+                    "solução",
+                    "insight",
+                    "descoberto",
+                    "identificado",
                 ]
             )
             else 0.0
@@ -469,9 +515,7 @@ class InsightProcessors:
 
         return formatted_text
 
-    def format_contexts_for_llm(
-        self, search_results: list[Any], context_analysis: dict[str, Any] | None = None
-    ) -> str:
+    def format_contexts_for_llm(self, search_results: list[Any], context_analysis: dict[str, Any] | None = None) -> str:
         """
         Formata contextos dos resultados para envio ao LLM com filtro semântico.
 
@@ -485,10 +529,7 @@ class InsightProcessors:
         is_metadata_listing = (
             context_analysis
             and "original_query" in context_analysis
-            and any(
-                word in context_analysis["original_query"].lower()
-                for word in ["liste", "quais", "disponíveis"]
-            )
+            and any(word in context_analysis["original_query"].lower() for word in ["liste", "quais", "disponíveis"])
         )
 
         if context_analysis and "original_query" in context_analysis and not is_metadata_listing:
@@ -516,9 +557,7 @@ class InsightProcessors:
                 metadata = result.get("metadata", {})
             elif hasattr(result, "original_result"):
                 search_result = result.original_result
-                content = getattr(
-                    result.context_window, "full_context_text", getattr(search_result, "content", "")
-                )
+                content = getattr(result.context_window, "full_context_text", getattr(search_result, "content", ""))
                 metadata = getattr(search_result, "metadata", {})
             else:
                 search_result = result

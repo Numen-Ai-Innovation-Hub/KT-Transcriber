@@ -248,9 +248,9 @@ class TestSearchEngineInit:
             patch("src.kt_search.search_engine.DynamicClientManager"),
             patch("src.kt_indexing.chromadb_store.chromadb.PersistentClient"),
             patch("src.kt_indexing.chromadb_store.openai.OpenAI"),
-            patch("src.kt_search.search_engine.InsightsAgent", autospec=True) if False else patch(
-                "src.kt_search.search_engine.SearchEngine._initialize_insights_agent"
-            ),
+            patch("src.kt_search.search_engine.InsightsAgent", autospec=True)
+            if False
+            else patch("src.kt_search.search_engine.SearchEngine._initialize_insights_agent"),
         ):
             from src.kt_search.search_engine import SearchEngine
 
@@ -351,7 +351,9 @@ class TestSearchEngineSearchMethod:
         engine._chromadb_executor.execute_search.return_value = []
         engine.insights_agent = MagicMock()
         engine.insights_agent.generate_insights.return_value = {
-            "response": "Resposta gerada.", "sources": [], "confidence": 0.9
+            "response": "Resposta gerada.",
+            "sources": [],
+            "confidence": 0.9,
         }
         engine.search_stats = {
             "total_queries": 0,

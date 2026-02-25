@@ -78,10 +78,7 @@ def _make_insights_result(
 
 
 def _make_raw_results(n: int = 3) -> list[dict[str, Any]]:
-    return [
-        {"content": f"conteúdo {i}", "quality_score": 0.8, "metadata": {"video_name": f"KT_{i}"}}
-        for i in range(n)
-    ]
+    return [{"content": f"conteúdo {i}", "quality_score": 0.8, "metadata": {"video_name": f"KT_{i}"}} for i in range(n)]
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -119,9 +116,7 @@ class TestPipelineLoggerEnrichmentPhase:
     def test_com_entidades_vazias_nao_crasha(self) -> None:
         """Entidades sem valores não causam crash no show_details=True."""
         pl = _make_logger()
-        enrichment = _make_enrichment_result(
-            entities={"clients": {"values": [], "confidence": 0.0}}
-        )
+        enrichment = _make_enrichment_result(entities={"clients": {"values": [], "confidence": 0.0}})
         pl.log_enrichment_phase("query", enrichment, 0.1, show_details=True)
 
     def test_query_muito_longa_nao_crasha(self) -> None:
@@ -190,9 +185,7 @@ class TestPipelineLoggerChromaDbPhase:
     def test_com_show_details_nao_levanta_excecao(self) -> None:
         """log_chromadb_phase com detalhes executa sem exceções."""
         pl = _make_logger()
-        enrichment = _make_enrichment_result(
-            entities={"clients": {"values": ["DEXCO"], "confidence": 0.9}}
-        )
+        enrichment = _make_enrichment_result(entities={"clients": {"values": ["DEXCO"], "confidence": 0.9}})
         pl.log_chromadb_phase(
             raw_results=_make_raw_results(5),
             chromadb_time=0.45,

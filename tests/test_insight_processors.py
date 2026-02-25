@@ -315,9 +315,7 @@ class TestInsightProcessorsCalculateSemanticRelevance:
     def test_score_entre_zero_e_um(self) -> None:
         """Score sempre fica entre 0.0 e 1.0."""
         p = _make_processors()
-        score = p.calculate_semantic_relevance(
-            "texto qualquer com palavras", ["palavras", "texto"], "texto palavras"
-        )
+        score = p.calculate_semantic_relevance("texto qualquer com palavras", ["palavras", "texto"], "texto palavras")
         assert 0.0 <= score <= 1.0
 
     def test_conteudo_relevante_maior_que_irrelevante(self) -> None:
@@ -474,11 +472,14 @@ class TestInsightProcessorsGetPerformanceConfig:
             assert "top_p" in config
             assert "timeout" in config
 
-    @pytest.mark.parametrize("query_type,expected_strategy", [
-        ("metadata_listing", "fast_listing"),
-        ("project_listing", "fast_listing"),
-        ("highlights_summary", "quick_analysis"),
-    ])
+    @pytest.mark.parametrize(
+        "query_type,expected_strategy",
+        [
+            ("metadata_listing", "fast_listing"),
+            ("project_listing", "fast_listing"),
+            ("highlights_summary", "quick_analysis"),
+        ],
+    )
     def test_estrategias_por_tipo(self, query_type: str, expected_strategy: str) -> None:
         """Tipos específicos mapeiam para estratégias conhecidas."""
         p = _make_processors()

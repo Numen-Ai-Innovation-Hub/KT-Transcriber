@@ -361,7 +361,6 @@ class InsightsAgent:
             fallback_used=True,
         )
 
-
     def _detect_cross_client_warning(self, search_results: list[Any]) -> dict | None:
         """
         Detecta se algum resultado contém warning de discrepância cliente vs entidade técnica

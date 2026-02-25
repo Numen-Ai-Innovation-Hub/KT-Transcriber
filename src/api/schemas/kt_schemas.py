@@ -1,7 +1,7 @@
 """Schemas Pydantic para endpoints KT.
 
 Cobre os três domínios:
-- kt_search  → KTSearchRequest, KTSearchResponse
+- kt_search  → KTSearchRequest, KTSearchResponse, pipeline schemas
 - kt_ingestion → AsyncJobResponse, JobStatusResponse
 - kt_indexing  → AsyncJobResponse, JobStatusResponse, KTIndexingStatusResponse
 """
@@ -29,6 +29,40 @@ class KTSearchResponse(BaseModel):
     query_type: str
     processing_time: float
     success: bool
+
+
+class PipelineStartRequest(BaseModel):
+    """Request para iniciar pipeline RAG transparente."""
+
+    query: str = Field(..., min_length=3, description="Pergunta ou consulta sobre as transcrições KT")
+
+
+class PipelineStartResponse(BaseModel):
+    """Response do início do pipeline — retorna session_id e job_id do primeiro estágio."""
+
+    session_id: str
+    job_id: str
+    stage: str = "enrich"
+    status: str = "enqueued"
+
+
+class StageJobResponse(BaseModel):
+    """Response de enfileiramento de um estágio do pipeline."""
+
+    session_id: str
+    job_id: str
+    stage: str
+    status: str = "enqueued"
+
+
+class StageStatusResponse(BaseModel):
+    """Status de um job ARQ de estágio do pipeline."""
+
+    session_id: str
+    job_id: str
+    arq_status: str  # queued | in_progress | complete | not_found | failed
+    stage_ready: bool  # True quando arq_status=="complete" E chave Redis confirmada
+    error: str | None = None
 
 
 # ════════════════════════════════════════════════════════════════════════════

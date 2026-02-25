@@ -252,9 +252,7 @@ class SelectivePipelineRunner:
         for i, meeting in enumerate(selected_meetings):
             logger.info(f"Processando {i + 1}/{len(selected_meetings)}: {meeting.name}")
             try:
-                self._ingestion_svc._process_single_meeting(
-                    meeting, processor, consolidator, stats
-                )
+                self._ingestion_svc._process_single_meeting(meeting, processor, consolidator, stats)
             except ApplicationError as e:
                 logger.error(f"Erro ao processar reunião '{meeting.name}': {e.message}")
                 stats["meetings_failed"] += 1

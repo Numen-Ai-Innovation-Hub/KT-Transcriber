@@ -185,7 +185,7 @@ class TLDVClient:
             if debug_list:
                 logger.info(f"=== DEBUG: Listando {len(meetings_list)} reuniões encontradas ===")
                 for i, meeting in enumerate(meetings_list[:10]):
-                    logger.info(f"  {i+1}: ID={meeting.get('id')} | Nome='{meeting.get('name')}'")
+                    logger.info(f"  {i + 1}: ID={meeting.get('id')} | Nome='{meeting.get('name')}'")
                 logger.info("=== FIM DEBUG ===")
 
             # Estratégia 1: Busca por nome exato
@@ -199,9 +199,7 @@ class TLDVClient:
             for meeting in meetings_list:
                 meeting_name_clean = meeting.get("name", "").replace(" ", "").lower()
                 if original_name_clean in meeting_name_clean or meeting_name_clean in original_name_clean:
-                    logger.info(
-                        f"Reunião encontrada (busca fuzzy): {meeting.get('id')} — '{meeting.get('name')}'"
-                    )
+                    logger.info(f"Reunião encontrada (busca fuzzy): {meeting.get('id')} — '{meeting.get('name')}'")
                     return meeting.get("id")
 
             # Estratégia 3: Busca por palavras-chave
@@ -317,9 +315,7 @@ class TLDVClient:
             Lista de segmentos de transcrição.
         """
         try:
-            response = self.session.get(
-                f"{self.base_url}/meetings/{meeting_id}/transcript", timeout=self.timeout
-            )
+            response = self.session.get(f"{self.base_url}/meetings/{meeting_id}/transcript", timeout=self.timeout)
             response.raise_for_status()
             data = response.json()
 
@@ -378,9 +374,7 @@ class TLDVClient:
             Lista de highlights.
         """
         try:
-            response = self.session.get(
-                f"{self.base_url}/meetings/{meeting_id}/highlights", timeout=self.timeout // 2
-            )
+            response = self.session.get(f"{self.base_url}/meetings/{meeting_id}/highlights", timeout=self.timeout // 2)
             response.raise_for_status()
             data = response.json()
 
@@ -455,9 +449,7 @@ class TLDVClient:
                     return meeting_id
 
                 elapsed = time.time() - start_time
-                logger.info(
-                    f"Reunião ainda não disponível — tentativa {attempt_count}, {elapsed:.0f}s decorridos"
-                )
+                logger.info(f"Reunião ainda não disponível — tentativa {attempt_count}, {elapsed:.0f}s decorridos")
                 time.sleep(polling_interval)
 
             except Exception as e:
@@ -632,10 +624,7 @@ class TLDVClient:
             Lista de dicionários com highlights.
         """
         highlights = self.get_highlights(meeting_id)
-        return [
-            {"text": h.text, "start_time": h.start_time, "source": h.source, "topic": h.topic}
-            for h in highlights
-        ]
+        return [{"text": h.text, "start_time": h.start_time, "source": h.source, "topic": h.topic} for h in highlights]
 
     def list_meetings(self, limit: int = 100) -> list[MeetingData]:
         """Lista todas as reuniões disponíveis na conta.
@@ -647,9 +636,7 @@ class TLDVClient:
             Lista de objetos MeetingData.
         """
         try:
-            response = self.session.get(
-                f"{self.base_url}/meetings", params={"limit": limit}, timeout=self.timeout // 2
-            )
+            response = self.session.get(f"{self.base_url}/meetings", params={"limit": limit}, timeout=self.timeout // 2)
             response.raise_for_status()
             meetings_data = response.json()
             meetings_list = meetings_data.get("results", [])

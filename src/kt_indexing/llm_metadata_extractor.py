@@ -83,7 +83,7 @@ class LLMMetadataExtractor:
 
             except openai.RateLimitError as e:
                 logger.warning(f"Rate limit atingido (tentativa {attempt + 1}): {e}")
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
 
             except openai.APIError as e:
                 logger.error(f"Erro de API OpenAI (tentativa {attempt + 1}): {e}")
@@ -136,7 +136,7 @@ class LLMMetadataExtractor:
             if len(parts) != 2:
                 continue
 
-            key = parts[0].strip().strip('"\'')
+            key = parts[0].strip().strip("\"'")
             value_str = parts[1].strip()
 
             if not key or key not in metadata:
@@ -157,14 +157,14 @@ class LLMMetadataExtractor:
         Returns:
             Valor analisado (str, list) ou None se inválido.
         """
-        value_str = value_str.strip().strip('"\'')
+        value_str = value_str.strip().strip("\"'")
 
         # Tentar como literal Python (listas, etc.)
         if value_str.startswith("["):
             try:
                 result = ast.literal_eval(value_str)
                 if isinstance(result, list):
-                    return [str(item).strip().strip('"\'') for item in result if item]
+                    return [str(item).strip().strip("\"'") for item in result if item]
                 return result
             except Exception:
                 # Tentar parse manual de lista simples: ["item1", "item2"]

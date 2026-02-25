@@ -47,6 +47,6 @@ async def get_indexing_job_status(job_id: str, request: Request) -> JobStatusRes
     job = Job(job_id=job_id, redis=request.app.state.arq_pool)
     job_status = await job.status()
     result: dict | None = None
-    if str(job_status) == "complete":
+    if job_status.value == "complete":
         result = await job.result()
-    return JobStatusResponse(job_id=job_id, status=str(job_status), result=result)
+    return JobStatusResponse(job_id=job_id, status=job_status.value, result=result)

@@ -68,8 +68,7 @@ class PipelineLogger:
             enriched_words = len(enrichment_result.enriched_query.split())
             if enriched_words > original_words:
                 logger.debug(
-                    f"   📈 Expansão: +{enriched_words - original_words} palavras"
-                    f" ({original_words} → {enriched_words})"
+                    f"   📈 Expansão: +{enriched_words - original_words} palavras ({original_words} → {enriched_words})"
                 )
         else:
             logger.debug(f'   📥 Input: "{original_query}"')
@@ -243,8 +242,7 @@ class PipelineLogger:
                 max_similarity = max(similarity_scores)
                 min_similarity = min(similarity_scores)
                 logger.debug(
-                    f"   📈 Similaridade: avg={avg_similarity:.3f},"
-                    f" max={max_similarity:.3f}, min={min_similarity:.3f}"
+                    f"   📈 Similaridade: avg={avg_similarity:.3f}, max={max_similarity:.3f}, min={min_similarity:.3f}"
                 )
 
             strategy = classification_result.strategy
@@ -252,9 +250,7 @@ class PipelineLogger:
                 base_limit = strategy.get("base_limit", 20)
                 search_limit = int(base_limit * strategy["top_k_modifier"])
                 if len(raw_results) >= search_limit:
-                    logger.debug(
-                        f"   ⚠️ Limite de busca atingido: {search_limit} chunks (pode haver mais resultados)"
-                    )
+                    logger.debug(f"   ⚠️ Limite de busca atingido: {search_limit} chunks (pode haver mais resultados)")
         else:
             filter_display = filters_applied if filters_applied else {"nenhum": "busca_geral"}
             logger.debug(f"   📤 Resultados: {len(raw_results)} chunks | Filtros: {filter_display}")
@@ -298,17 +294,14 @@ class PipelineLogger:
                         total_chunks += chunk_count
 
                 if client_info:
-                    logger.debug(
-                        f"   🔍 Clientes na base ({len(client_info)} clientes, {total_chunks} chunks total):"
-                    )
+                    logger.debug(f"   🔍 Clientes na base ({len(client_info)} clientes, {total_chunks} chunks total):")
                     for info in client_info:
                         logger.debug(f"      • {info}")
                 else:
                     logger.debug("   🔍 Clientes disponíveis: Consultando ChromaDB dynamicamente...")
 
                 logger.debug(
-                    f"   🔄 Cache de clientes: "
-                    f"{'HIT' if hasattr(dynamic_client_manager, '_client_cache') else 'MISS'}"
+                    f"   🔄 Cache de clientes: {'HIT' if hasattr(dynamic_client_manager, '_client_cache') else 'MISS'}"
                 )
 
             except Exception as e:
@@ -371,9 +364,7 @@ class PipelineLogger:
                 logger.debug("   🏆 Quality Analysis:")
                 logger.debug(f"      • Threshold: {quality_threshold}")
                 logger.debug(f"      • Passed threshold: {quality_passed}/{len(quality_scores)} chunks")
-                logger.debug(
-                    f"      • Scores: avg={avg_quality:.3f}, max={max_quality:.3f}, min={min_quality:.3f}"
-                )
+                logger.debug(f"      • Scores: avg={avg_quality:.3f}, max={max_quality:.3f}, min={min_quality:.3f}")
                 logger.debug(f"      • Quality gate: {'✅ PASSED' if quality_passed > 0 else '❌ FAILED'}")
 
             logger.debug(f"   ✅ Quality threshold met: {selection_result.quality_threshold_met}")
@@ -447,9 +438,7 @@ class PipelineLogger:
             else:
                 confidence_desc, confidence_emoji = "Baixa", "🔴"
 
-            logger.debug(
-                f"   📊 Confiança final: {confidence_level:.3f} ({confidence_desc}) {confidence_emoji}"
-            )
+            logger.debug(f"   📊 Confiança final: {confidence_level:.3f} ({confidence_desc}) {confidence_emoji}")
 
             response_length = len(insights_result.insight)
             if response_length > 500:

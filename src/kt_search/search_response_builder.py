@@ -165,8 +165,7 @@ class SearchResponseBuilder:
                 "video_name": metadata.get("video_name", "Unknown"),
                 "speaker": metadata.get("speaker", "Unknown"),
                 "timestamp": (
-                    f"{metadata.get('start_time_formatted', '00:00')}"
-                    f"-{metadata.get('end_time_formatted', '00:00')}"
+                    f"{metadata.get('start_time_formatted', '00:00')}-{metadata.get('end_time_formatted', '00:00')}"
                 ),
                 "quality_score": chunk.get("quality_score", 0.0),
                 "relevance_reason": f"Qualidade: {chunk.get('quality_score', 0.0):.2f}",

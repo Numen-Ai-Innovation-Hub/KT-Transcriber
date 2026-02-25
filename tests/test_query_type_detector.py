@@ -149,11 +149,14 @@ class TestQueryTypeDetectorDeterminePrimaryTheme:
         result = detector.determine_primary_theme("reunião ARCO", [], "ARCO")
         assert result == "reunião_arco"
 
-    @pytest.mark.parametrize("query,expected", [
-        ("quais os nomes dos clientes", "listagem_clientes"),
-        ("qual cliente estava na reunião", "identificação_cliente"),
-        ("o erro que ocorreu no sistema", "resolução_problemas"),
-    ])
+    @pytest.mark.parametrize(
+        "query,expected",
+        [
+            ("quais os nomes dos clientes", "listagem_clientes"),
+            ("qual cliente estava na reunião", "identificação_cliente"),
+            ("o erro que ocorreu no sistema", "resolução_problemas"),
+        ],
+    )
     def test_temas_por_padrao_de_query(self, query: str, expected: str) -> None:
         """Temas baseados em padrões de keywords na query sem cliente dominante."""
         detector = self._make_detector()
