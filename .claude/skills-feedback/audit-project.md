@@ -5,12 +5,21 @@
 **Itens auditados:** 50+
 **Conformes:** 44 ✅
 **Não conformes:** 2 ❌ → **resolvidas em 2026-02-25** ✅
-**Pendentes (stack):** 2 ⏳ (smoke + e2e — stack não estava ativa)
+**Pendentes (stack):** 0 ⏳ → **validados em 2026-02-25** ✅
 
 **Resultados dos testes:**
 - Unit:  115 passed, 0 failed (expandido de 61 → 115 após resolução das não-conformidades)
-- Smoke: pendente (stack não rodando no momento da auditoria)
-- E2E:   pendente (stack não rodando no momento da auditoria)
+- Smoke: 8 passed, 0 failed — validado em 2026-02-25 com stack ativa (5.66s)
+- E2E:   7 passed, 0 failed — validado em 2026-02-25 com stack ativa (6.91s)
+
+**Observação E2E:** 1 DeprecationWarning não-bloqueante — `HTTP_422_UNPROCESSABLE_ENTITY` deprecated no Starlette; correto seria `HTTP_422_UNPROCESSABLE_CONTENT`. Não afeta funcionamento.
+
+**Validação de runtime (logs de serviço — 2026-02-25):**
+- Zero erros/exceptions nos logs fastapi.log e arq.log durante execução dos testes
+- kt_ingestion_task executou com sucesso em produção: 41 reuniões TL:DV processadas, JSONs salvos em data/transcriptions/
+- ARQ Worker conectou ao Redis Cloud (redis-18227.c12.us-east-1-4.ec2.cloud.redislabs.com:18227) — redis_version=8.2.1
+- ChromaDB inicializou corretamente: coleção kt_transcriptions criada/obtida em data/vector_db/
+- KTSearchService, KTIndexingService, KTIngestionService todos inicializados sem erros no startup
 
 **Não conformidades — RESOLVIDAS:**
 1. ✅ `hashlib.md5` usado diretamente em `src/kt_search/insights_agent.py:86` — corrigido em commit `2b8a4b2`: substituído por `utils/hash_manager.get_hash_manager().generate_content_hash()`

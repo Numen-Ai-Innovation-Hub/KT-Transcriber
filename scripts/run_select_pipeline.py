@@ -243,7 +243,7 @@ class SelectivePipelineRunner:
 
         print(f"Encontradas {len(all_meetings)} reunião(ões).")
 
-        existing_ids = self._ingestion_svc._get_existing_meeting_ids()  # type: ignore[attr-defined]
+        existing_ids = self._ingestion_svc._get_existing_meeting_ids()
         stats["meetings_already_downloaded"] = len(existing_ids)
 
         selected_meetings = self._interactive_select(all_meetings, existing_ids)
@@ -252,7 +252,7 @@ class SelectivePipelineRunner:
         for i, meeting in enumerate(selected_meetings):
             logger.info(f"Processando {i + 1}/{len(selected_meetings)}: {meeting.name}")
             try:
-                self._ingestion_svc._process_single_meeting(  # type: ignore[attr-defined]
+                self._ingestion_svc._process_single_meeting(
                     meeting, processor, consolidator, stats
                 )
             except ApplicationError as e:

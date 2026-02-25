@@ -57,13 +57,21 @@ from .query_enricher import (
 from .search_engine import (
     SearchEngine,
     SearchResponse,
+)
+
+# Search Formatters
+from .search_formatters import (
     formatar_resultado_teams,
-    interactive_mode,
-    main,
     main_teams,
     print_results,
     quick_search,
     search_kt_knowledge,
+)
+
+# Search CLI
+from .search_cli import (
+    interactive_mode,
+    main,
     single_query_mode,
 )
 

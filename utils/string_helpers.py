@@ -7,7 +7,6 @@ Sem dependências de src/ ou config/.
 
 import re
 import unicodedata
-from pathlib import Path
 
 
 def normalize_unicode(text: str) -> str:

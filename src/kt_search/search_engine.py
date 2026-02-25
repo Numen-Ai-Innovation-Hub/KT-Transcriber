@@ -8,10 +8,7 @@ response generation through the InsightsAgent.
 Pipeline Position: **Search Engine** → (Orchestrates entire pipeline)
 """
 
-import argparse
-import sys
 import time
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -19,26 +16,18 @@ if TYPE_CHECKING:
 
 from utils.logger_setup import LoggerManager
 
-from .chunk_selector import ChunkSelector, SelectionResult
+from .chunk_selector import ChunkSelector
 from .dynamic_client_manager import DynamicClientManager
-from .kt_search_constants import ERROR_MESSAGES, SEARCH_CONFIG
+from .kt_search_constants import SEARCH_CONFIG
 from .query_classifier import ClassificationResult, QueryClassifier, QueryType
 from .query_enricher import EnrichmentResult, QueryEnricher
+from .search_logging import PipelineLogger
+from .search_response_builder import SearchResponseBuilder
+from .search_types import SearchResponse
 
 logger = LoggerManager.get_logger(__name__)
 
-
-@dataclass
-class SearchResponse:
-    """Final response from search engine"""
-
-    intelligent_response: dict[str, Any]
-    contexts: list[dict[str, Any]]
-    summary_stats: dict[str, Any]
-    query_type: str
-    processing_time: float
-    success: bool
-    error_message: str | None = None
+__all__ = ["SearchEngine", "SearchResponse"]
 
 
 class SearchEngine:
@@ -75,6 +64,10 @@ class SearchEngine:
             "failed_queries": 0,
             "avg_processing_time": 0.0,
         }
+
+        # Helpers extraídos — sem estado de instância
+        self._response_builder = SearchResponseBuilder()
+        self._pipeline_logger = PipelineLogger()
 
         logger.info("SearchEngine initialized successfully with all pipeline components")
 
@@ -154,7 +147,7 @@ class SearchEngine:
 
             # Validate input
             if not self._validate_query(query):
-                return self._create_error_response("Invalid query", query, start_time)
+                return self._response_builder.create_error_response("Invalid query", query, start_time)
 
             # PHASE 1: Query Preprocessing and Enrichment
             enrichment_start = time.time()
@@ -163,10 +156,10 @@ class SearchEngine:
             enrichment_time = time.time() - enrichment_start
 
             if enrichment_result.confidence < 0.1:
-                return self._create_error_response("Query enrichment failed", query, start_time)
+                return self._response_builder.create_error_response("Query enrichment failed", query, start_time)
 
             # Rich enrichment logging
-            self._log_enrichment_phase(query, enrichment_result, enrichment_time, show_details)
+            self._pipeline_logger.log_enrichment_phase(query, enrichment_result, enrichment_time, show_details)
 
             logger.debug(f"Query enriched successfully: {len(enrichment_result.entities)} entities detected")
 
@@ -179,7 +172,7 @@ class SearchEngine:
             classification_time = time.time() - classification_start
 
             # Rich classification logging
-            self._log_classification_phase(classification_result, classification_time, show_details)
+            self._pipeline_logger.log_classification_phase(classification_result, classification_time, show_details)
 
             logger.debug(
                 f"Query classified as {classification_result.query_type.value} "
@@ -187,9 +180,9 @@ class SearchEngine:
             )
 
             # 🚨 P1-1 FIX: Validar cliente inexistente ANTES do ChromaDB search
-            if self._should_stop_for_nonexistent_client(query):
+            if self._response_builder.should_stop_for_nonexistent_client(query):
                 logger.info("🚫 Cliente inexistente detectado - parando pipeline")
-                return self._create_client_not_found_response(query, start_time)
+                return self._response_builder.create_client_not_found_response(query, start_time)
 
             # PHASE 3: ChromaDB Search
             chromadb_start = time.time()
@@ -198,7 +191,9 @@ class SearchEngine:
             chromadb_time = time.time() - chromadb_start
 
             # Rich ChromaDB logging
-            self._log_chromadb_phase(raw_results, chromadb_time, enrichment_result, classification_result, show_details)
+            self._pipeline_logger.log_chromadb_phase(
+                raw_results, chromadb_time, enrichment_result, classification_result, show_details
+            )
 
             logger.debug(f"ChromaDB search returned {len(raw_results)} raw results")
 
@@ -213,12 +208,16 @@ class SearchEngine:
                 client_time = time.time() - client_start
 
                 # Rich client discovery logging
-                self._log_client_discovery_phase(client_time, show_details)
+                self._pipeline_logger.log_client_discovery_phase(
+                    client_time, show_details, self.dynamic_client_manager
+                )
 
             # PHASE 5: Intelligent Chunk Selection
             selection_start = time.time()
 
-            query_analysis = self._analyze_query_complexity(enrichment_result, classification_result, query)
+            query_analysis = self._response_builder.analyze_query_complexity(
+                enrichment_result, classification_result, query
+            )
             top_k = self.chunk_selector.calculate_adaptive_top_k(classification_result.query_type, query_analysis)
 
             selection_result = self.chunk_selector.select_intelligent_chunks(
@@ -227,7 +226,9 @@ class SearchEngine:
             selection_time = time.time() - selection_start
 
             # Rich selection logging
-            self._log_selection_phase(selection_result, raw_results, top_k, selection_time, show_details)
+            self._pipeline_logger.log_selection_phase(
+                selection_result, raw_results, top_k, selection_time, show_details
+            )
 
             logger.debug(
                 f"Selected {len(selection_result.selected_chunks)} chunks using "
@@ -243,15 +244,17 @@ class SearchEngine:
             insights_time = time.time() - insights_start
 
             if not insights_result:
-                return self._create_error_response("Failed to generate insights", query, start_time)
+                return self._response_builder.create_error_response(
+                    "Failed to generate insights", query, start_time
+                )
 
             # Rich insights logging
-            self._log_insights_phase(insights_result, insights_time, show_details)
+            self._pipeline_logger.log_insights_phase(insights_result, insights_time, show_details)
 
             logger.debug(f"Insights generated with {insights_result.confidence:.2f} confidence")
 
             # PHASE 7: Format Final Response
-            response = self._format_final_response(
+            response = self._response_builder.format_final_response(
                 query, insights_result, selection_result, classification_result, start_time
             )
 
@@ -278,7 +281,7 @@ class SearchEngine:
         except Exception as e:
             logger.error(f"Search failed with error: {e}")
             self.search_stats["failed_queries"] += 1
-            return self._create_error_response(f"Search error: {str(e)}", query, start_time)
+            return self._response_builder.create_error_response(f"Search error: {str(e)}", query, start_time)
 
     def _validate_query(self, query: str) -> bool:
         """Validate input query"""
@@ -1423,199 +1426,6 @@ class SearchEngine:
 
         return filters if filters else None
 
-    def _analyze_query_complexity(
-        self, enrichment_result: EnrichmentResult, classification_result: ClassificationResult, original_query: str = ""
-    ) -> dict[str, Any]:
-        """Analyze query complexity for adaptive processing"""
-        return {
-            "query_complexity": enrichment_result.context.get("query_complexity", "medium"),
-            "has_specific_client": enrichment_result.context.get("has_specific_client", False),
-            "has_technical_terms": enrichment_result.context.get("has_technical_terms", False),
-            "has_temporal": enrichment_result.context.get("has_temporal", False),
-            "is_listing_request": enrichment_result.context.get("is_listing_request", False),
-            "is_comparison_request": enrichment_result.context.get("is_comparison_request", False),
-            "is_broad_request": enrichment_result.context.get("is_broad_request", False),
-            "detected_client": enrichment_result.context.get("detected_client"),
-            "entity_count": len(enrichment_result.entities),
-            "enrichment_confidence": enrichment_result.confidence,
-            "classification_confidence": classification_result.confidence,
-            "original_query": original_query,
-        }
-
-    def _format_final_response(
-        self,
-        original_query: str,
-        insights_result: Any,
-        selection_result: SelectionResult,
-        classification_result: ClassificationResult,
-        start_time: float,
-    ) -> SearchResponse:
-        """Format final response in expected structure"""
-
-        processing_time = time.time() - start_time
-
-        # Format intelligent response
-        intelligent_response = {
-            "answer": insights_result.insight,
-            "details": self._extract_additional_details(selection_result.selected_chunks),
-            "confidence": insights_result.confidence,
-            "processing_time": insights_result.processing_time,
-        }
-
-        # Format contexts for display (pass query type for metadata listing)
-        contexts = self._format_contexts_for_display(
-            selection_result.selected_chunks, classification_result.query_type.value
-        )
-
-        # Generate summary statistics
-        summary_stats = {
-            "total_chunks_found": selection_result.total_candidates,
-            "chunks_selected": len(selection_result.selected_chunks),
-            "clients_involved": self._extract_unique_clients(selection_result.selected_chunks),
-            "query_type": classification_result.query_type.value,
-            "processing_time": processing_time,
-            "selection_strategy": selection_result.selection_strategy,
-            "quality_threshold_met": selection_result.quality_threshold_met,
-        }
-
-        return SearchResponse(
-            intelligent_response=intelligent_response,
-            contexts=contexts,
-            summary_stats=summary_stats,
-            query_type=classification_result.query_type.value,
-            processing_time=processing_time,
-            success=True,
-        )
-
-    def _extract_additional_details(self, chunks: list[dict[str, Any]]) -> str:
-        """Extract additional relevant details from selected chunks"""
-        if not chunks:
-            return ""
-
-        # Count unique videos/meetings
-        unique_videos = len({chunk.get("metadata", {}).get("video_name", "Unknown") for chunk in chunks})
-
-        # Count unique clients
-        unique_clients = len({chunk.get("metadata", {}).get("client_name", "Unknown") for chunk in chunks})
-
-        details = f"Informações baseadas em {len(chunks)} contextos"
-        if unique_videos > 1:
-            details += f" de {unique_videos} reuniões diferentes"
-        if unique_clients > 1:
-            details += f" envolvendo {unique_clients} clientes"
-
-        return details
-
-    def _format_contexts_for_display(
-        self, chunks: list[dict[str, Any]], query_type: str | None = None
-    ) -> list[dict[str, Any]]:
-        """Format contexts for user-friendly display"""
-
-        # For METADATA queries, show only unique videos without content
-        if query_type == "METADATA":
-            return self._format_metadata_listing_display(chunks)
-
-        # For other query types, show full context as before
-        formatted_contexts = []
-
-        for i, chunk in enumerate(chunks, 1):
-            metadata = chunk.get("metadata", {})
-
-            context = {
-                "rank": i,
-                "content": chunk.get("content", "")[:300] + "..."
-                if len(chunk.get("content", "")) > 300
-                else chunk.get("content", ""),
-                "client": metadata.get("client_name", "Unknown"),
-                "video_name": metadata.get("video_name", "Unknown"),
-                "speaker": metadata.get("speaker", "Unknown"),
-                "timestamp": (
-                    f"{metadata.get('start_time_formatted', '00:00')}-{metadata.get('end_time_formatted', '00:00')}"
-                ),
-                "quality_score": chunk.get("quality_score", 0.0),
-                "relevance_reason": f"Qualidade: {chunk.get('quality_score', 0.0):.2f}",
-                "original_url": metadata.get("original_url", ""),
-            }
-
-            # Add similarity score if available
-            if "similarity_score" in chunk:
-                context["similarity_score"] = chunk["similarity_score"]
-                context["relevance_reason"] += f", Similaridade: {chunk['similarity_score']:.2f}"
-
-            formatted_contexts.append(context)
-
-        return formatted_contexts
-
-    def _format_metadata_listing_display(self, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Format contexts for metadata listing - show only unique videos"""
-        unique_videos = {}
-
-        # Extract unique videos
-        for chunk in chunks:
-            metadata = chunk.get("metadata", {})
-            video_name = metadata.get("video_name", "")
-            client_name = metadata.get("client_name", "Unknown")
-
-            if video_name and video_name not in unique_videos:
-                unique_videos[video_name] = {
-                    "client": client_name,
-                    "video_name": video_name,
-                    "original_url": metadata.get("original_url", ""),
-                }
-
-        # Format as display contexts (no content, just video info)
-        formatted_contexts = []
-        for i, (_video_name, info) in enumerate(unique_videos.items(), 1):
-            context = {
-                "rank": i,
-                "content": "",  # No content for metadata listing
-                "client": info["client"],
-                "video_name": info["video_name"],
-                "speaker": "",
-                "timestamp": "",
-                "quality_score": 1.0,  # Not applicable for metadata listing
-                "relevance_reason": "Vídeo disponível na base de conhecimento",
-                "original_url": info["original_url"],
-            }
-            formatted_contexts.append(context)
-
-        return formatted_contexts
-
-    def _extract_unique_clients(self, chunks: list[dict[str, Any]]) -> list[str]:
-        """Extract unique client names from selected chunks"""
-        clients = set()
-
-        for chunk in chunks:
-            client = chunk.get("metadata", {}).get("client_name")
-            if client and client != "Unknown":
-                clients.add(client)
-
-        return list(clients)
-
-    def _create_error_response(self, error_message: str, query: str, start_time: float) -> SearchResponse:
-        """Create error response"""
-        processing_time = time.time() - start_time
-
-        return SearchResponse(
-            intelligent_response={
-                "answer": ERROR_MESSAGES.get("no_results", "Erro ao processar consulta"),
-                "details": error_message,
-                "confidence": 0.0,
-                "processing_time": processing_time,
-            },
-            contexts=[],
-            summary_stats={
-                "total_chunks_found": 0,
-                "chunks_selected": 0,
-                "clients_involved": [],
-                "query_type": "ERROR",
-                "processing_time": processing_time,
-            },
-            query_type="ERROR",
-            processing_time=processing_time,
-            success=False,
-            error_message=error_message,
-        )
 
     def _update_avg_processing_time(self, processing_time: float) -> None:
         """Update average processing time statistics"""
@@ -1628,527 +1438,6 @@ class SearchEngine:
             # Running average calculation
             new_avg = ((current_avg * (total_successful - 1)) + processing_time) / total_successful
             self.search_stats["avg_processing_time"] = new_avg
-
-    def _log_enrichment_phase(
-        self, original_query: str, enrichment_result: EnrichmentResult, enrichment_time: float, show_details: bool
-    ) -> None:
-        """Log enrichment phase with rich details"""
-        logger.debug(
-            f"1️⃣ ENRIQUECIMENTO {'DA QUERY ' if show_details else ''}"
-            f"| {enrichment_time:.3f}s | conf: {enrichment_result.confidence:.2f}"
-        )
-
-        if show_details:
-            logger.debug(f'   📥 Query original: "{original_query}" (len: {len(original_query)})')
-            logger.debug(f'   🔄 Query limpa: "{enrichment_result.cleaned_query}"')
-            logger.debug(f'   📤 Query enriquecida: "{enrichment_result.enriched_query}"')
-            logger.debug(f"   📊 Confiança do enriquecimento: {enrichment_result.confidence:.3f}")
-
-            logger.debug(f"   🎯 Entidades detectadas ({len(enrichment_result.entities)} tipos):")
-
-            for entity_type, entity_data in enrichment_result.entities.items():
-                if entity_data.get("values"):
-                    confidence = entity_data.get("confidence", 0.0)
-                    values = entity_data["values"]
-                    logger.debug(f"      • {entity_type}: {values} (conf: {confidence:.3f}, count: {len(values)})")
-                else:
-                    logger.debug(f"      • {entity_type}: [] (não detectado)")
-
-            # Mostrar flags de contexto detalhados
-            context_flags_true = []
-            context_flags_values = []
-            for key, value in enrichment_result.context.items():
-                if isinstance(value, bool) and value:
-                    context_flags_true.append(key)
-                elif not isinstance(value, bool) and value:
-                    context_flags_values.append(f"{key}={value}")
-
-            if context_flags_true:
-                logger.debug(f"   📋 Flags contexto: {', '.join(context_flags_true)}")
-            if context_flags_values:
-                logger.debug(f"   📋 Valores contexto: {', '.join(context_flags_values)}")
-
-            # Mostrar estatísticas do enriquecimento
-            original_words = len(original_query.split())
-            enriched_words = len(enrichment_result.enriched_query.split())
-            if enriched_words > original_words:
-                logger.debug(
-                    f"   📈 Expansão: +{enriched_words - original_words} palavras ({original_words} → {enriched_words})"
-                )
-
-        else:
-            logger.debug(f'   📥 Input: "{original_query}"')
-            logger.debug(f'   📤 Output: "{enrichment_result.enriched_query}"')
-
-            # Compact entity display
-            entity_summary = {}
-            total_entities = 0
-            for entity_type, entity_data in enrichment_result.entities.items():
-                if entity_data.get("values"):
-                    entity_summary[entity_type] = entity_data["values"]
-                    total_entities += len(entity_data["values"])
-
-            if entity_summary:
-                logger.debug(f"   🎯 Entidades ({total_entities}): {entity_summary}")
-            else:
-                logger.debug("   🎯 Entidades: Nenhuma detectada")
-
-    def _log_classification_phase(
-        self, classification_result: ClassificationResult, classification_time: float, show_details: bool
-    ) -> None:
-        """Log classification phase with rich details"""
-        logger.debug(
-            f"2️⃣ CLASSIFICAÇÃO {'DE QUERY ' if show_details else ''}"
-            f"| {classification_time:.3f}s | conf: {classification_result.confidence:.2f}"
-        )
-
-        if show_details:
-            strategy = classification_result.strategy
-
-            # Mostrar scores detalhados de todos os tipos RAG
-            logger.debug("   📊 Scores de classificação:")
-            logger.debug(
-                f"      🎯 {classification_result.query_type.value}:"
-                f" {classification_result.confidence:.3f} ⭐ (ESCOLHIDO)"
-            )
-
-            # Mostrar outros scores se disponíveis no strategy
-            if "debug_scores" in strategy:
-                for rag_type, score in strategy["debug_scores"].items():
-                    if rag_type != classification_result.query_type.value:
-                        logger.debug(f"      • {rag_type}: {score:.3f}")
-
-            logger.debug(f"   📤 Tipo RAG final: {classification_result.query_type.value}")
-            logger.debug(f"   🎯 Strategy usada: {strategy.get('name', 'default')}")
-
-            # Mostrar parâmetros da estratégia
-            if "top_k_modifier" in strategy:
-                logger.debug(f"   📏 TOP_K modifier: {strategy['top_k_modifier']}")
-            if "filters" in strategy and strategy["filters"]:
-                logger.debug(f"   🔍 Filtros da strategy: {strategy['filters']}")
-
-            # Extract reasoning if available
-            reasoning = strategy.get("reasoning", "Query classification based on pattern matching")
-            logger.debug(f"   📋 Razão da classificação: {reasoning}")
-
-            # Mostrar características detectadas
-            detected_features = []
-            if "semantic_indicators" in strategy:
-                detected_features.append(f"semantic_indicators={strategy['semantic_indicators']}")
-            if "metadata_indicators" in strategy:
-                detected_features.append(f"metadata_indicators={strategy['metadata_indicators']}")
-            if "temporal_indicators" in strategy:
-                detected_features.append(f"temporal_indicators={strategy['temporal_indicators']}")
-
-            if detected_features:
-                logger.debug(f"   🧠 Features detectadas: {', '.join(detected_features)}")
-
-        else:
-            logger.debug(
-                f"   📤 Tipo: {classification_result.query_type.value}"
-                f" | Strategy: {classification_result.strategy.get('name', 'default')}"
-            )
-            reasoning = classification_result.strategy.get("reasoning", "Auto-detected")
-            logger.debug(f"   🎯 Razão: {reasoning}")
-            logger.debug(f"   📊 Confiança: {classification_result.confidence:.3f}")
-
-    def _log_chromadb_phase(
-        self,
-        raw_results: list[dict[str, Any]],
-        chromadb_time: float,
-        enrichment_result: EnrichmentResult,
-        classification_result: ClassificationResult,
-        show_details: bool,
-    ) -> None:
-        """Log ChromaDB search phase with rich details"""
-        logger.debug(f"3️⃣ BUSCA {'NO ' if show_details else ''}CHROMADB | {chromadb_time:.3f}s")
-
-        # Determine search method
-        query_type = classification_result.query_type.value
-        if query_type == "SEMANTIC":
-            method = "similarity_search (com embedding)"
-            search_detail = "Busca por similaridade semântica usando embeddings"
-        elif query_type == "METADATA":
-            method = "metadata_search (sem embedding)"
-            search_detail = "Busca estruturada apenas em metadados"
-        elif query_type == "ENTITY":
-            method = "entity_search (metadados + entidades)"
-            search_detail = "Busca focada em entidades específicas"
-        elif query_type == "TEMPORAL":
-            method = "temporal_search (com filtros de data)"
-            search_detail = "Busca com restrições temporais"
-        elif query_type == "CONTENT":
-            method = "content_search (busca literal)"
-            search_detail = "Busca literal no conteúdo dos chunks"
-        else:
-            method = f"{query_type.lower()}_search"
-            search_detail = "Método de busca personalizado"
-
-        # Extract applied filters
-        filters_applied = {}
-        client_normalization_info = None
-
-        if "clients" in enrichment_result.entities:
-            client_values = enrichment_result.entities["clients"]["values"]
-            if client_values:
-                detected_client = client_values[0]
-                # Simular normalização (deveria vir do sistema real)
-                normalized_client = detected_client.upper()  # Simplificado
-                filters_applied["client_name"] = normalized_client
-
-                if detected_client.upper() != normalized_client:
-                    client_normalization_info = f'"{detected_client}" → "{normalized_client}"'
-                else:
-                    client_normalization_info = f'"{detected_client}" → "{normalized_client}" (exact match)'
-
-        # Count unique videos and clients
-        unique_videos = set()
-        unique_clients = set()
-        similarity_scores = []
-
-        for result in raw_results:
-            metadata = result.get("metadata", {})
-            video_name_raw = metadata.get("video_name", "Unknown")
-            client_name_raw = metadata.get("client_name", "Unknown")
-            video_name = video_name_raw if isinstance(video_name_raw, str) else "Unknown"
-            client_name = client_name_raw if isinstance(client_name_raw, str) else "Unknown"
-
-            if video_name != "Unknown":
-                unique_videos.add(video_name)
-            if client_name != "Unknown":
-                unique_clients.add(client_name)
-
-            # Coletar scores de similaridade se disponíveis
-            if "similarity_score" in result:
-                similarity_scores.append(result["similarity_score"])
-
-        if show_details:
-            logger.debug(f"   🎯 Método de busca: {method}")
-            logger.debug(f"   📋 Descrição: {search_detail}")
-
-            # Mostrar embedding info se semantic search
-            if query_type == "SEMANTIC":
-                logger.debug("   🧠 Embedding gerado para query enriquecida")
-                if enrichment_result.enriched_query != enrichment_result.cleaned_query:
-                    logger.debug("   📈 Query expandida usada para embedding")
-
-            # Filtros detalhados
-            if filters_applied:
-                logger.debug("   📥 Filtros ChromaDB aplicados:")
-                for key, value in filters_applied.items():
-                    logger.debug(f'      • {key}: "{value}"')
-
-                # Client normalization detalhado
-                if client_normalization_info:
-                    logger.debug(f"   🔄 Normalização de cliente: {client_normalization_info}")
-            else:
-                logger.debug("   📥 Filtros: Nenhum filtro aplicado (busca geral)")
-
-            # Resultados detalhados
-            logger.debug(f"   📤 Resultados brutos: {len(raw_results)} chunks")
-            logger.debug("   📊 Distribuição:")
-            logger.debug(
-                f"      • {len(unique_videos)} vídeos únicos:"
-                f" {', '.join(sorted(unique_videos)[:3])}{'...' if len(unique_videos) > 3 else ''}"
-            )
-            logger.debug(f"      • {len(unique_clients)} clientes únicos: {', '.join(sorted(unique_clients))}")
-
-            # Similaridade scores se semantic search
-            if similarity_scores:
-                avg_similarity = sum(similarity_scores) / len(similarity_scores)
-                max_similarity = max(similarity_scores)
-                min_similarity = min(similarity_scores)
-                logger.debug(
-                    f"   📈 Similaridade: avg={avg_similarity:.3f}, max={max_similarity:.3f}, min={min_similarity:.3f}"
-                )
-
-            # Mostrar strategy limit se disponível
-            strategy = classification_result.strategy
-            if "top_k_modifier" in strategy:
-                base_limit = strategy.get("base_limit", 20)
-                search_limit = int(base_limit * strategy["top_k_modifier"])
-                if len(raw_results) >= search_limit:
-                    logger.debug(f"   ⚠️ Limite de busca atingido: {search_limit} chunks (pode haver mais resultados)")
-
-        else:
-            filter_display = filters_applied if filters_applied else {"nenhum": "busca_geral"}
-            logger.debug(f"   📤 Resultados: {len(raw_results)} chunks | Filtros: {filter_display}")
-            logger.debug(f"   🎯 Método: {method}")
-            logger.debug(f"   📊 Origem: {len(unique_videos)} vídeos, {len(unique_clients)} clientes")
-
-            if client_normalization_info:
-                logger.debug(f"   🔄 Cliente: {client_normalization_info}")
-
-    def _log_client_discovery_phase(self, client_time: float, show_details: bool) -> None:
-        """Log client discovery phase"""
-        logger.debug(f"4️⃣ DESCOBERTA {'DE CLIENTES' if show_details else 'CLIENTES'} | {client_time:.3f}s")
-
-        if show_details:
-            logger.debug("   🎯 Processo: Dynamic Client Manager ativo")
-            logger.debug("   📋 Função: Enriquecer metadados com descoberta dinâmica de clientes")
-
-            # Get available clients dynamically
-            try:
-                clients = self.dynamic_client_manager.discover_clients()
-                client_info = []
-                total_chunks = 0
-
-                for client_name, client_data in clients.items():
-                    chunk_count = client_data.chunk_count
-                    if chunk_count > 0:
-                        client_info.append(f"{client_name} ({chunk_count} chunks)")
-                        total_chunks += chunk_count
-
-                if client_info:
-                    logger.debug(f"   🔍 Clientes na base ({len(client_info)} clientes, {total_chunks} chunks total):")
-                    for info in client_info:
-                        logger.debug(f"      • {info}")
-                else:
-                    logger.debug("   🔍 Clientes disponíveis: Consultando ChromaDB dynamicamente...")
-
-                logger.debug(
-                    f"   🔄 Cache de clientes: "
-                    f"{'HIT' if hasattr(self.dynamic_client_manager, '_client_cache') else 'MISS'}"
-                )
-
-            except Exception as e:
-                logger.debug(f"   ⚠️ Erro ao obter clientes: {str(e)[:50]}...")
-                logger.debug("   🔍 Fallback: Consultando ChromaDB diretamente...")
-
-            logger.debug("   📤 Resultado: Metadados de contexto client enrichment aplicado")
-            _perf = "Rápido" if client_time < 1.0 else "Normal" if client_time < 3.0 else "Lento"
-            logger.debug(f"   ⚡ Performance: {client_time:.3f}s ({_perf})")
-
-        else:
-            # Get quick client count
-            try:
-                clients = self.dynamic_client_manager.discover_clients()
-                client_count = len([c for c, data in clients.items() if data.chunk_count > 0])
-                logger.debug(f"   🔍 {client_count} clientes na base | Enriquecimento: {client_time:.3f}s")
-            except Exception:
-                logger.debug(f"   🎯 Enriquecimento dinâmico: {client_time:.3f}s")
-
-    def _log_selection_phase(
-        self,
-        selection_result: SelectionResult,
-        raw_results: list[dict[str, Any]],
-        top_k: int,
-        selection_time: float,
-        show_details: bool,
-    ) -> None:
-        """Log chunk selection phase with rich details"""
-        logger.debug(f"5️⃣ SELEÇÃO {'INTELIGENTE ' if show_details else 'CHUNKS '}| {selection_time:.3f}s")
-
-        if show_details:
-            logger.debug("   🎯 ChunkSelector: Seleção inteligente com Quality + Diversity")
-            logger.debug(f"   📊 TOP_K adaptativo calculado: {top_k}")
-            logger.debug(f"      Base: 20 → Modificado: {top_k} (baseado no tipo de query)")
-            logger.debug(f"   🔍 Estratégia selecionada: {selection_result.selection_strategy}")
-
-            # Mostrar possíveis estratégias
-            strategies = {
-                "all_candidates": "Manter todos os candidatos (metadata listing)",
-                "quality_filter": "Filtrar por quality threshold",
-                "top_k_limit": "Limitar aos TOP_K melhores",
-                "diversity_selection": "Seleção com diversidade",
-            }
-
-            strategy_desc = strategies.get(selection_result.selection_strategy, "Estratégia personalizada")
-            logger.debug(f"   📋 Descrição: {strategy_desc}")
-
-            logger.debug(
-                f"   📤 Resultado da seleção: {len(selection_result.selected_chunks)}/{len(raw_results)} chunks"
-            )
-
-            # Analisar quality scores dos chunks
-            quality_scores = [chunk.get("quality_score", 0.0) for chunk in raw_results if "quality_score" in chunk]
-            quality_threshold = 0.3  # Padrão do sistema
-
-            if quality_scores:
-                avg_quality = sum(quality_scores) / len(quality_scores)
-                max_quality = max(quality_scores)
-                min_quality = min(quality_scores)
-                quality_passed = sum(1 for score in quality_scores if score >= quality_threshold)
-
-                logger.debug("   🏆 Quality Analysis:")
-                logger.debug(f"      • Threshold: {quality_threshold}")
-                logger.debug(f"      • Passed threshold: {quality_passed}/{len(quality_scores)} chunks")
-                logger.debug(f"      • Scores: avg={avg_quality:.3f}, max={max_quality:.3f}, min={min_quality:.3f}")
-                logger.debug(f"      • Quality gate: {'✅ PASSED' if quality_passed > 0 else '❌ FAILED'}")
-
-            # Mostrar threshold result
-            threshold_met = selection_result.quality_threshold_met
-            logger.debug(f"   ✅ Quality threshold met: {threshold_met}")
-
-            # Diversity info se aplicável
-            if selection_result.selection_strategy == "diversity_selection":
-                logger.debug("   🌈 Diversity: Seleção balanceada entre vídeos/clientes")
-
-            # Performance da seleção
-            chunks_per_second = len(raw_results) / selection_time if selection_time > 0 else float("inf")
-            logger.debug(f"   ⚡ Performance: {chunks_per_second:.0f} chunks/s processados")
-
-        else:
-            strategy_short = {
-                "all_candidates": "Manter todos",
-                "quality_filter": "Quality filter",
-                "top_k_limit": "TOP_K limit",
-                "diversity_selection": "Diversity",
-            }.get(selection_result.selection_strategy, selection_result.selection_strategy)
-
-            logger.debug(
-                f"   📤 Selecionados: {len(selection_result.selected_chunks)}/{len(raw_results)} | TOP_K: {top_k}"
-            )
-            logger.debug(
-                f"   🎯 Estratégia: {strategy_short}"
-                f" | Quality: {'✅' if selection_result.quality_threshold_met else '❌'}"
-            )
-
-    def _log_insights_phase(self, insights_result: Any, insights_time: float, show_details: bool) -> None:
-        """Log insights generation phase with rich details"""
-        logger.debug(
-            f"6️⃣ {'GERAÇÃO DE ' if show_details else ''}"
-            f"INSIGHTS | {insights_time:.3f}s | conf: {insights_result.confidence:.2f}"
-        )
-
-        if show_details:
-            logger.debug("   🎯 InsightsAgent: Geração de resposta inteligente final")
-
-            # Determine template/method used
-            processing_time = getattr(insights_result, "processing_time", insights_time)
-            is_fast_track = processing_time < 0.01  # Very fast = fast-track
-
-            if is_fast_track:
-                template = "metadata_listing (fast-track)"
-                method = "Template automático - Sem chamada LLM"
-                llm_cost = "R$ 0.00"
-            else:
-                template = "LLM-generated"
-                method = "GPT-4o-mini (texto + contextos)"
-                # Estimativa básica de custo (tokens aproximados)
-                estimated_tokens = len(insights_result.insight) * 1.3  # Aprox input+output
-                cost_estimate = estimated_tokens * 0.00001  # Custo aproximado
-                llm_cost = f"~R$ {cost_estimate:.4f}"
-
-            logger.debug(f"   📋 Template usado: {template}")
-            logger.debug(f"   🤖 Método: {method}")
-            logger.debug(f"   💰 Custo estimado: {llm_cost}")
-            logger.debug(f"   ⚡ Fast-track: {'✅ Ativo' if is_fast_track else '❌ Inativo'}")
-
-            # Analisar input que foi para o InsightsAgent
-            if hasattr(insights_result, "unique_videos"):
-                logger.debug(f"   🔄 Agrupamento: Por video_name ({insights_result.unique_videos} vídeos únicos)")
-            else:
-                logger.debug("   🔄 Processamento: Análise semântica completa de contextos")
-
-            # Qualidade da resposta
-            confidence_level = insights_result.confidence
-            if confidence_level >= 0.9:
-                confidence_desc = "Muito Alta"
-                confidence_emoji = "🟢"
-            elif confidence_level >= 0.7:
-                confidence_desc = "Alta"
-                confidence_emoji = "🟡"
-            elif confidence_level >= 0.5:
-                confidence_desc = "Média"
-                confidence_emoji = "🟠"
-            else:
-                confidence_desc = "Baixa"
-                confidence_emoji = "🔴"
-
-            logger.debug(f"   📊 Confiança final: {confidence_level:.3f} ({confidence_desc}) {confidence_emoji}")
-
-            # Tamanho da resposta
-            response_length = len(insights_result.insight)
-            if response_length > 500:
-                response_desc = "Resposta detalhada"
-            elif response_length > 200:
-                response_desc = "Resposta moderada"
-            elif response_length > 50:
-                response_desc = "Resposta concisa"
-            else:
-                response_desc = "Resposta muito breve"
-
-            logger.debug(f"   📝 Resposta: {response_length} chars ({response_desc})")
-
-            # Performance analysis
-            if insights_time < 1.0:
-                perf_desc = "Excelente"
-                perf_emoji = "🚀"
-            elif insights_time < 3.0:
-                perf_desc = "Boa"
-                perf_emoji = "⚡"
-            elif insights_time < 5.0:
-                perf_desc = "Aceitável"
-                perf_emoji = "⏱️"
-            else:
-                perf_desc = "Lenta"
-                perf_emoji = "🐌"
-
-            logger.debug(f"   ⚡ Performance: {insights_time:.3f}s ({perf_desc}) {perf_emoji}")
-
-        else:
-            is_fast_track = insights_time < 0.01
-            template = "fast-track" if is_fast_track else "LLM"
-            method_desc = "Template" if is_fast_track else "GPT-4o-mini"
-
-            logger.debug(f"   📤 Template: {template} | Método: {method_desc}")
-            logger.debug(
-                f"   🎯 Confiança: {insights_result.confidence:.3f} | {'🚀 Fast' if is_fast_track else '🤖 LLM'}"
-            )
-
-    def _should_stop_for_nonexistent_client(self, query: str) -> bool:
-        """Check if query mentions a specific non-existent client that should stop pipeline"""
-        query_lower = query.lower()
-
-        # Only check for explicit client queries
-        if "cliente" not in query_lower:
-            return False
-
-        # Check for obvious non-existent clients (common test cases)
-        non_existent_patterns = ["xpto", "teste", "inexistente", "naoexiste"]
-
-        for pattern in non_existent_patterns:
-            if pattern in query_lower:
-                logger.info(f"🚫 Cliente obviamente inexistente detectado: {pattern}")
-                return True
-
-        return False
-
-    def _create_client_not_found_response(self, query: str, start_time: float) -> SearchResponse:
-        """Create response for non-existent client without ChromaDB lookup"""
-        processing_time = time.time() - start_time
-
-        # Known available clients (hardcoded for performance)
-        available_clients = ["ARCO", "DEXCO", "PC_FACTORY", "VÍSSIMO"]
-
-        response_text = "**Cliente não encontrado na base de conhecimento.**\n"
-        response_text += "**Clientes disponíveis:**\n"
-        for client in available_clients:
-            response_text += f"• {client}\n"
-        response_text += (
-            "**Sugestão:** Verifique a grafia do nome do cliente ou escolha um dos clientes listados acima."
-        )
-
-        return SearchResponse(
-            intelligent_response={
-                "answer": response_text,
-                "details": "Cliente inexistente detectado no pipeline de classificação",
-                "confidence": 0.95,
-                "processing_time": processing_time,
-                "method": "early_exit_client_not_found",
-            },
-            contexts=[],
-            summary_stats={
-                "total_chunks_found": 0,
-                "chunks_selected": 0,
-                "clients_involved": [],  # Lista vazia em vez de int
-                "query_original": query,
-            },
-            query_type="EARLY_EXIT",
-            processing_time=processing_time,
-            success=True,
-        )
 
     def get_search_stats(self) -> dict[str, Any]:
         """Get search engine performance statistics"""
@@ -2182,321 +1471,3 @@ class SearchEngine:
             health_status["overall_healthy"] = False
 
         return health_status
-
-
-# Convenience functions for external use
-def search_kt_knowledge(query: str) -> SearchResponse:
-    """Convenience function for KT knowledge search"""
-    search_engine = SearchEngine()
-    return search_engine.search(query)
-
-
-def quick_search(query: str) -> dict[str, Any]:
-    """Quick search returning only the intelligent response"""
-    response = search_kt_knowledge(query)
-    return response.intelligent_response
-
-
-def formatar_resultado_teams(response: SearchResponse, pergunta: str) -> str:
-    """Formata SearchResponse para exibição no Microsoft Teams.
-
-    Args:
-        response: Resultado tipado do SearchEngine.
-        pergunta: Pergunta original do usuário.
-
-    Returns:
-        Texto formatado em markdown compatível com Teams.
-    """
-    linhas = ["🎥 **Transcrição de KT - Resultado da Consulta**", f" **Pergunta:** {pergunta}", ""]
-
-    # Insights diretos
-    insight_text = response.intelligent_response.get("answer", "")
-    if insight_text:
-        linhas.extend(["💡 **INSIGHTS:**", "=" * 50])
-        for line in insight_text.strip().split("\n"):
-            if line.strip():
-                linhas.append(f"• {line.strip()}")
-
-    # Contextos encontrados
-    if response.contexts:
-        linhas.extend(["", "**FONTES ENCONTRADAS:**", "=" * 50])
-
-        for i, context in enumerate(response.contexts, 1):
-            video_name = context.get("video_name", "Unknown")
-            speaker = context.get("speaker", "Unknown")
-            timestamp = context.get("timestamp", "00:00")
-            content = context.get("content", "")
-            video_link = context.get("original_url", "")
-
-            linhas.append(f"\n**{i}. [{video_name}] {speaker} ({timestamp}):**")
-            if content:
-                linhas.append(f"   {content}")
-            if video_link:
-                linhas.append(f"   🎥 [Assistir momento específico]({video_link})")
-
-    # Métricas de busca
-    stats = response.summary_stats
-    if stats:
-        linhas.extend(["", "**MÉTRICAS DE BUSCA:**", "-" * 30])
-        linhas.append(f"•  Tempo total: {response.processing_time:.2f}s")
-        confidence = response.intelligent_response.get("confidence", 0.0)
-        if confidence:
-            linhas.append(f"•  Confiança: {confidence * 100:.1f}%")
-        chunks_selected = stats.get("chunks_selected", 0)
-        if chunks_selected:
-            linhas.append(f"•  Fontes utilizadas: {chunks_selected} contextos")
-
-    return "\n".join(linhas)
-
-
-def main_teams(payload: dict[str, Any]) -> dict[str, Any]:
-    """Entry point para o Teams Gateway Python.
-
-    Args:
-        payload: dict com chave 'text' contendo a pergunta do usuário.
-
-    Returns:
-        dict com 'success' + 'mensagem' em caso de sucesso,
-        ou 'erro' + 'mensagem' em caso de falha.
-    """
-    try:
-        pergunta = payload.get("text", "").strip()
-
-        if not pergunta:
-            return {
-                "erro": "Pergunta não fornecida",
-                "mensagem": "🎥 **Transcrição de KT**\n\nDigite sua pergunta sobre as transcrições.",
-            }
-
-        search_engine = SearchEngine()
-        search_result = search_engine.search(pergunta, show_details=False)
-
-        if not search_result.success:
-            return {
-                "erro": "Erro na consulta",
-                "mensagem": f"{search_result.error_message or 'Erro desconhecido'}",
-            }
-
-        resposta_formatada = formatar_resultado_teams(search_result, pergunta)
-        return {"success": True, "mensagem": resposta_formatada}
-
-    except Exception as e:
-        return {"erro": "Erro interno", "mensagem": f"Erro no processamento: {str(e)}"}
-
-
-def print_results(response: SearchResponse, show_details: bool = False) -> None:
-    """Exibe resultados da consulta RAG no terminal.
-
-    Args:
-        response: SearchResponse retornado pelo SearchEngine.
-        show_details: Se True, exibe métricas técnicas detalhadas.
-    """
-    if not response.success:
-        logger.info("═" * 120)
-        logger.info("CONSULTA SEM RESULTADOS")
-        logger.info("─" * 40)
-        logger.info(f"  {response.error_message}")
-        logger.info("─" * 40)
-        logger.info(f"  Tempo total: {response.processing_time:.2f}s")
-        logger.info("═" * 120)
-        return
-
-    logger.info("═" * 120)
-
-    # Resposta inteligente
-    logger.info("RESPOSTA INTELIGENTE:")
-    logger.info("─" * 40)
-
-    answer_text = response.intelligent_response.get("answer", "").strip()
-    if answer_text:
-        for line in answer_text.split("\n"):
-            if line.strip():
-                logger.info(f"  {line.strip()}")
-    else:
-        logger.info("  Não foi possível gerar resposta.")
-
-    if response.intelligent_response.get("details"):
-        logger.info(f"  Detalhes: {response.intelligent_response['details']}")
-
-    # Contextos encontrados
-    logger.info("CONTEXTOS ENCONTRADOS:")
-    logger.info("─" * 40)
-
-    if response.contexts:
-        for context in response.contexts:
-            content = context.get("content", "")
-            video_link = context.get("original_url", "")
-
-            if video_link:
-                client_info = (
-                    f"  Cliente: {context.get('client', 'N/A')}"
-                    f" | Reunião: {context.get('video_name', 'N/A')}"
-                    f"\n     Link: {video_link}"
-                )
-            else:
-                client_info = f"  Cliente: {context.get('client', 'N/A')} | Reunião: {context.get('video_name', 'N/A')}"
-
-            if response.query_type == "METADATA":
-                logger.info(f"{context['rank']}. {client_info.strip()}")
-            else:
-                if content and content.strip():
-                    logger.info(f"{context['rank']}. {content}")
-                else:
-                    logger.info(f"{context['rank']}. Contexto relevante — {context.get('speaker', 'Participante')}")
-
-                logger.info(client_info)
-
-                if context.get("timestamp") and context["timestamp"] not in ("Unknown", ""):
-                    logger.info(f"     Tempo: {context['timestamp']}")
-
-                if show_details:
-                    logger.debug(
-                        f"     Qualidade: {context.get('quality_score', 0.0):.2f}"
-                        f" | Relevância: {context.get('similarity_score', 0.0):.2f}"
-                    )
-    else:
-        logger.info("  Nenhum contexto específico encontrado.")
-
-    # Métricas técnicas (apenas com show_details=True)
-    if show_details:
-        logger.info("MÉTRICAS DETALHADAS:")
-        logger.info("─" * 40)
-        confidence = response.intelligent_response.get("confidence", 0.0)
-        confidence_icon = "OK" if confidence > 0.8 else "AVG" if confidence > 0.5 else "LOW"
-        logger.info(f"  Tempo total:                {response.processing_time:.4f}s")
-        logger.info(f"  Tempo insights:             {response.intelligent_response.get('processing_time', 0.0):.4f}s")
-        logger.info(f"  Tipo de consulta:           {response.query_type}")
-        logger.info(f"  Estratégia de seleção:      {response.summary_stats.get('selection_strategy', 'N/A')}")
-        logger.info(f"  Chunks encontrados:         {response.summary_stats.get('total_chunks_found', 0)}")
-        logger.info(f"  Chunks selecionados:        {response.summary_stats.get('chunks_selected', 0)}")
-        logger.info(f"  Clientes envolvidos:        {len(response.summary_stats.get('clients_involved', []))}")
-        logger.info(f"  Limiar qualidade atingido:  {response.summary_stats.get('quality_threshold_met', 'N/A')}")
-        logger.info(f"  [{confidence_icon}] Confiança:            {confidence:.1%}")
-
-    logger.info("═" * 120)
-
-
-def interactive_mode() -> None:
-    """Modo interativo — REPL para múltiplas consultas RAG.
-
-    Aceita queries em linguagem natural e exibe resultados formatados.
-    Comandos especiais: sair, detalhes, help.
-    """
-    logger.info("MODO INTERATIVO — Sistema RAG KT Transcriber")
-    logger.info("Digite 'sair' para encerrar | 'detalhes' para ativar métricas | 'help' para ajuda")
-    logger.info("─" * 60)
-
-    search_engine = SearchEngine(verbose=False)
-    show_details = False
-
-    while True:
-        try:
-            query = input("\n  Pergunta: ").strip()
-
-            if not query:
-                continue
-
-            if query.lower() in ("sair", "quit", "exit", "q"):
-                logger.info("Até logo!")
-                break
-
-            if query.lower() in ("detalhes", "details", "d"):
-                show_details = not show_details
-                status = "ativados" if show_details else "desativados"
-                logger.info(f"  Detalhes técnicos {status}")
-                continue
-
-            if query.lower() in ("help", "ajuda", "h"):
-                logger.info(
-                    "\n"
-                    "COMANDOS:\n"
-                    "  sair / quit     — Encerrar\n"
-                    "  detalhes        — Ativar/desativar métricas técnicas\n"
-                    "  help / ajuda    — Esta ajuda\n"
-                    "\n"
-                    "EXEMPLOS DE CONSULTA:\n"
-                    '  "O que temos sobre integrações da Víssimo?"\n'
-                    '  "Liste os KTs disponíveis"\n'
-                    '  "Quem participou do KT da Arco?"\n'
-                    '  "Problemas recentes na Víssimo"\n'
-                    '  "onde mencionaram ZEWM0008"'
-                )
-                continue
-
-            logger.info("Processando através do pipeline RAG...")
-            response = search_engine.search(query, show_details=show_details)
-            print_results(response, show_details=show_details)
-
-        except KeyboardInterrupt:
-            logger.info("\nInterrompido pelo usuário. Até logo!")
-            break
-        except Exception as e:
-            logger.error(f"Erro inesperado: {e}")
-
-
-def single_query_mode(query: str, verbose: bool = False) -> None:
-    """Executa uma consulta única e exibe o resultado.
-
-    Args:
-        query: Pergunta em linguagem natural.
-        verbose: Se True, exibe métricas técnicas detalhadas.
-    """
-    search_engine = SearchEngine(verbose=verbose)
-    logger.info(f"Executando consulta RAG: '{query}'")
-    response = search_engine.search(query, show_details=verbose)
-    print_results(response, show_details=verbose)
-
-
-def main() -> None:
-    """Ponto de entrada CLI do search engine.
-
-    Parseia argumentos e roteia para modo interativo ou consulta única.
-
-    Uso:
-        uv run python -m src.kt_search.search_engine
-        uv run python -m src.kt_search.search_engine --query "PERGUNTA"
-
-    Exemplo:
-        uv run python -m src.kt_search.search_engine -q "Liste os KTs disponíveis" --verbose
-    """
-    parser = argparse.ArgumentParser(
-        description="CLI de busca semântica KT Transcriber",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            "Exemplos:\n"
-            "  uv run python -m src.kt_search.search_engine\n"
-            '  uv run python -m src.kt_search.search_engine --query "O que temos sobre SAP SD?"\n'
-            '  uv run python -m src.kt_search.search_engine -q "Liste os KTs" --verbose\n'
-            "\n"
-            "Tipos RAG suportados:\n"
-            "  SEMANTIC  — Busca por significado/conteúdo\n"
-            "  METADATA  — Busca estruturada/listagem\n"
-            "  ENTITY    — Busca por entidades específicas\n"
-            "  TEMPORAL  — Busca por períodos\n"
-            "  CONTENT   — Busca literal no conteúdo\n"
-        ),
-    )
-    parser.add_argument("--query", "-q", type=str, help="Pergunta para consulta direta")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Mostrar métricas técnicas do processamento")
-
-    args = parser.parse_args()
-
-    from src.config.startup import initialize_application
-
-    initialize_application()
-
-    try:
-        if args.query:
-            single_query_mode(args.query, verbose=args.verbose)
-        else:
-            interactive_mode()
-    except KeyboardInterrupt:
-        logger.warning("Interrompido pelo usuário (Ctrl+C)")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"Erro fatal: {e}")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()

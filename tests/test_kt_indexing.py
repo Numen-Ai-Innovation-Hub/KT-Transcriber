@@ -580,8 +580,8 @@ class TestKTIndexingServiceUnit:
 
     def test_singleton_retorna_mesma_instancia(self) -> None:
         """get_kt_indexing_service() retorna sempre a mesma instância."""
-        from tests.conftest import _reset_all_singletons
         from src.services.kt_indexing_service import get_kt_indexing_service
+        from tests.conftest import _reset_all_singletons
 
         _reset_all_singletons()
         s1 = get_kt_indexing_service()

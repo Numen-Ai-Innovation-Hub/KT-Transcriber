@@ -333,6 +333,9 @@ class TestSearchEngineSearchMethod:
         selection.processing_time = 0.01
         selection.quality_threshold_met = True
 
+        from src.kt_search.search_logging import PipelineLogger
+        from src.kt_search.search_response_builder import SearchResponseBuilder
+
         engine = SearchEngine.__new__(SearchEngine)
         engine.verbose = False
         engine.query_enricher = MagicMock()
@@ -356,6 +359,8 @@ class TestSearchEngineSearchMethod:
             "failed_queries": 0,
             "avg_processing_time": 0.0,
         }
+        engine._response_builder = SearchResponseBuilder()
+        engine._pipeline_logger = PipelineLogger()
 
         result = engine.search("transações FI")
 
@@ -426,6 +431,7 @@ class TestInsightsAgent:
     def test_instancia_com_mock_client(self) -> None:
         """InsightsAgent aceita mock OpenAI client via construtor."""
         from openai import OpenAI
+
         from src.kt_search.insights_agent import InsightsAgent
 
         mock_client = MagicMock(spec=OpenAI)
@@ -438,6 +444,7 @@ class TestInsightsAgent:
     def test_sem_resultados_de_busca_retorna_fallback(self) -> None:
         """generate_direct_insight com search_results=[] retorna DirectInsightResult com fallback_used=True."""
         from openai import OpenAI
+
         from src.kt_search.insights_agent import DirectInsightResult, InsightsAgent
 
         mock_client = MagicMock(spec=OpenAI)
@@ -453,6 +460,7 @@ class TestInsightsAgent:
     def test_cache_hit_retorna_resultado_armazenado(self) -> None:
         """Resultado já no cache é retornado diretamente sem nova chamada."""
         from openai import OpenAI
+
         from src.kt_search.insights_agent import DirectInsightResult, InsightsAgent
 
         mock_client = MagicMock(spec=OpenAI)
@@ -477,6 +485,7 @@ class TestInsightsAgent:
     def test_prompt_templates_inicializados(self) -> None:
         """Todos os templates de prompt são inicializados no construtor."""
         from openai import OpenAI
+
         from src.kt_search.insights_agent import InsightsAgent
 
         mock_client = MagicMock(spec=OpenAI)
