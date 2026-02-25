@@ -56,12 +56,14 @@ $LogDir = Join-Path $RepoPath "logs"
 if (-not (Test-Path $LogDir)) {
     New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 }
-$LogFastApi = Join-Path $LogDir "fastapi.log"
-$LogArq     = Join-Path $LogDir "arq.log"
+$LogFastApi   = Join-Path $LogDir "fastapi.log"
+$LogArq       = Join-Path $LogDir "arq.log"
+$LogStreamlit = Join-Path $LogDir "streamlit.log"
 
 # Limpar logs anteriores para facilitar leitura
-"" | Set-Content $LogFastApi -Encoding UTF8
-"" | Set-Content $LogArq     -Encoding UTF8
+"" | Set-Content $LogFastApi   -Encoding UTF8
+"" | Set-Content $LogArq       -Encoding UTF8
+"" | Set-Content $LogStreamlit -Encoding UTF8
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 # PRE-REQUISITOS
@@ -104,7 +106,7 @@ Write-Info "Ambiente virtual encontrado"
 # INICIAR SERVICOS
 # ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
-Write-Subheader "Iniciando FastAPI (porta 8000) e ARQ Worker"
+Write-Subheader "Iniciando FastAPI (porta 8000), ARQ Worker e Streamlit (porta 8501)"
 
 $WtPath = Get-ToolPath -CommandName "wt" -FallbackPath "$env:LOCALAPPDATA\Microsoft\WindowsApps\wt.exe"
 
@@ -131,7 +133,12 @@ if ($WtPath) {
     $bytesArq = [System.Text.Encoding]::Unicode.GetBytes($cmdArq)
     $encArq = [Convert]::ToBase64String($bytesArq)
 
-    $wtArgs = "-w 0 nt --title `"FastAPI`" powershell -NoExit -EncodedCommand $encFastApi ; nt --title `"ARQ Worker`" powershell -NoExit -EncodedCommand $encArq"
+    # Streamlit (porta 8501) — UI de busca KT
+    $cmdStreamlit = "$utf8Cmd cd '$RepoPath'; & '$($venv.VenvActivate)'; `$host.UI.RawUI.WindowTitle = 'Streamlit'; Write-Host 'Iniciando Streamlit (porta 8501) — log: logs/streamlit.log'; streamlit run scripts/app.py --server.port 8501 --server.headless true | Tee-Object -FilePath '$LogStreamlit'"
+    $bytesStreamlit = [System.Text.Encoding]::Unicode.GetBytes($cmdStreamlit)
+    $encStreamlit = [Convert]::ToBase64String($bytesStreamlit)
+
+    $wtArgs = "-w 0 nt --title `"FastAPI`" powershell -NoExit -EncodedCommand $encFastApi ; nt --title `"ARQ Worker`" powershell -NoExit -EncodedCommand $encArq ; nt --title `"Streamlit`" powershell -NoExit -EncodedCommand $encStreamlit"
     Start-Process $WtPath -ArgumentList $wtArgs
 
     Write-Info "Abas de servico adicionadas ao Windows Terminal."
@@ -149,6 +156,12 @@ if ($WtPath) {
     Start-Process powershell -ArgumentList @(
         "-NoExit", "-Command",
         "cd '$RepoPath'; & '$($venv.VenvActivate)'; arq src.tasks.arq_worker.WorkerSettings | Tee-Object -FilePath '$LogArq'"
+    ) -WindowStyle Normal
+    Start-Sleep -Seconds 2
+
+    Start-Process powershell -ArgumentList @(
+        "-NoExit", "-Command",
+        "cd '$RepoPath'; & '$($venv.VenvActivate)'; streamlit run scripts/app.py --server.port 8501 --server.headless true | Tee-Object -FilePath '$LogStreamlit'"
     ) -WindowStyle Normal
     Start-Sleep -Seconds 2
 }
@@ -181,10 +194,12 @@ Write-Host "  - Redis:       Redis Cloud (configurado no .env)"
 Write-Host "  - FastAPI:     http://localhost:8000"
 Write-Host "  - Swagger UI:  http://localhost:8000/docs"
 Write-Host "  - ARQ Worker:  Processando jobs em background"
+Write-Host "  - Streamlit:   http://localhost:8501"
 Write-Host ""
 Write-Host "Logs de servico (lidos pelo Claude Code):" -ForegroundColor Cyan
-Write-Host "  - logs/fastapi.log  — output completo do uvicorn"
-Write-Host "  - logs/arq.log      — output completo do ARQ Worker"
+Write-Host "  - logs/fastapi.log    — output completo do uvicorn"
+Write-Host "  - logs/arq.log        — output completo do ARQ Worker"
+Write-Host "  - logs/streamlit.log  — output completo do Streamlit"
 Write-Host ""
 Write-Host "Para rodar os testes:" -ForegroundColor Yellow
 Write-Host "  uv run python -m pytest tests/ -m smoke     # smoke: stack sobe e responde"

@@ -78,7 +78,7 @@ Forbidden: `except Exception: pass`, `HTTPException` fora de routers, `logger.ex
 ## Commands
 
 **uv:** `uv sync --group dev` (sync deps), `uv add <pkg>==<ver>` (add dep), `uv add --dev <pkg>==<ver>` (add dev dep), `uv lock --upgrade` (upgrade all)
-**App:** `uvicorn src.api.main:app --reload` (dev), `uvicorn src.api.main:app --host 0.0.0.0 --port 8000` (prod), `arq src.tasks.arq_worker.WorkerSettings` (worker)
+**App:** `uvicorn src.api.main:app --reload` (dev), `uvicorn src.api.main:app --host 0.0.0.0 --port 8000` (prod), `arq src.tasks.arq_worker.WorkerSettings` (worker), `streamlit run scripts/app.py` (UI Streamlit — porta 8501)
 **Dev:** `.venv\Scripts\ruff.exe check src utils scripts tests` (lint), `.venv\Scripts\ruff.exe format src utils scripts tests` (format), `.venv\Scripts\mypy.exe --config-file=pyproject.toml src utils scripts` (type check — NÃO inclui tests/), `uv run python -m pytest tests/ -m "not smoke and not e2e"` (unit tests), `pre-commit run --all-files` (hooks)
 
 ## Code Style

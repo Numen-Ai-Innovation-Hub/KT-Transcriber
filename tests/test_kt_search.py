@@ -287,6 +287,16 @@ class TestSearchEngineInit:
         assert engine.search_stats["total_queries"] == 0  # type: ignore[union-attr]
         assert engine.search_stats["successful_queries"] == 0  # type: ignore[union-attr]
 
+    def test_validate_query_retorna_verdadeiro_para_query_valida(self) -> None:
+        """_validate_query retorna True para query com comprimento adequado."""
+        engine = self._make_engine()
+        assert engine._validate_query("transações do módulo FI") is True  # type: ignore[union-attr]
+
+    def test_validate_query_retorna_falso_para_query_vazia(self) -> None:
+        """_validate_query retorna False para string vazia."""
+        engine = self._make_engine()
+        assert engine._validate_query("") is False  # type: ignore[union-attr]
+
 
 class TestSearchEngineSearchMethod:
     """Testa o método search com pipeline completamente mockado."""
@@ -352,3 +362,125 @@ class TestSearchEngineSearchMethod:
         assert isinstance(result, SearchResponse)
         assert isinstance(result.success, bool)
         assert isinstance(result.processing_time, float)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DynamicClientManager — métodos puros (sem ChromaDB real)
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestDynamicClientManager:
+    """Testa DynamicClientManager — lógica pura de normalização e matching."""
+
+    def _make_manager(self) -> object:
+        """Cria DynamicClientManager com ChromaDBStore mockado."""
+        with patch("src.kt_search.dynamic_client_manager.ChromaDBStore"):
+            from src.kt_search.dynamic_client_manager import DynamicClientManager
+
+            return DynamicClientManager()
+
+    def test_get_client_variations_gera_upper_e_lower(self) -> None:
+        """Variações incluem versões uppercase e lowercase do nome."""
+        manager = self._make_manager()
+        result = manager.get_client_variations("EMPRESA_X")  # type: ignore[attr-defined]
+
+        result_lower = [v.lower() for v in result]
+        assert "empresa_x" in result_lower
+        assert "EMPRESA_X" in result  # type: ignore[operator]
+        assert len(result) >= 3
+
+    def test_get_client_variations_unknown_retorna_vazio(self) -> None:
+        """'UNKNOWN' retorna lista vazia (cliente inválido)."""
+        manager = self._make_manager()
+        result = manager.get_client_variations("UNKNOWN")  # type: ignore[attr-defined]
+        assert result == []
+
+    def test_normalize_text_remove_acentos(self) -> None:
+        """_normalize_text converte 'Ação' → 'Acao'."""
+        manager = self._make_manager()
+        result = manager._normalize_text("Ação")  # type: ignore[attr-defined]
+        assert result == "Acao"
+
+    def test_is_cache_valid_sem_timestamp_retorna_falso(self) -> None:
+        """Cache sem timestamp é considerado inválido."""
+        manager = self._make_manager()
+        # cache_timestamp é None por padrão
+        assert manager._is_cache_valid() is False  # type: ignore[attr-defined]
+
+    def test_should_ignore_client_nomes_invalidos(self) -> None:
+        """Nomes inválidos ('UNKNOWN', '') retornam True em _should_ignore_client."""
+        manager = self._make_manager()
+        assert manager._should_ignore_client("UNKNOWN") is True  # type: ignore[attr-defined]
+        assert manager._should_ignore_client("") is True  # type: ignore[attr-defined]
+        assert manager._should_ignore_client("EMPRESA_VALIDA") is False  # type: ignore[attr-defined]
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# InsightsAgent — mock via parâmetro do construtor
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestInsightsAgent:
+    """Testa InsightsAgent — instância com mock client, fallback e cache."""
+
+    def test_instancia_com_mock_client(self) -> None:
+        """InsightsAgent aceita mock OpenAI client via construtor."""
+        from openai import OpenAI
+        from src.kt_search.insights_agent import InsightsAgent
+
+        mock_client = MagicMock(spec=OpenAI)
+        agent = InsightsAgent(openai_client=mock_client)
+
+        assert agent.openai_client is mock_client
+        assert agent.model == "gpt-4o-mini"
+        assert isinstance(agent._insights_cache, dict)
+
+    def test_sem_resultados_de_busca_retorna_fallback(self) -> None:
+        """generate_direct_insight com search_results=[] retorna DirectInsightResult com fallback_used=True."""
+        from openai import OpenAI
+        from src.kt_search.insights_agent import DirectInsightResult, InsightsAgent
+
+        mock_client = MagicMock(spec=OpenAI)
+        agent = InsightsAgent(openai_client=mock_client)
+
+        with patch("utils.hash_manager.get_hash_manager") as mock_hm:
+            mock_hm.return_value.generate_content_hash.return_value = "key-sem-resultados"
+            result = agent.generate_direct_insight("query de teste", [])
+
+        assert isinstance(result, DirectInsightResult)
+        assert result.fallback_used is True
+
+    def test_cache_hit_retorna_resultado_armazenado(self) -> None:
+        """Resultado já no cache é retornado diretamente sem nova chamada."""
+        from openai import OpenAI
+        from src.kt_search.insights_agent import DirectInsightResult, InsightsAgent
+
+        mock_client = MagicMock(spec=OpenAI)
+        agent = InsightsAgent(openai_client=mock_client)
+
+        cached = DirectInsightResult(
+            insight="Resultado em cache",
+            confidence=0.9,
+            sources_used=2,
+            processing_time=0.01,
+            fallback_used=False,
+        )
+        fixed_key = "cache-key-fixo"
+        agent._insights_cache[fixed_key] = cached
+
+        with patch("utils.hash_manager.get_hash_manager") as mock_hm:
+            mock_hm.return_value.generate_content_hash.return_value = fixed_key
+            result = agent.generate_direct_insight("qualquer query", make_raw_chunk_result(3))
+
+        assert result is cached
+
+    def test_prompt_templates_inicializados(self) -> None:
+        """Todos os templates de prompt são inicializados no construtor."""
+        from openai import OpenAI
+        from src.kt_search.insights_agent import InsightsAgent
+
+        mock_client = MagicMock(spec=OpenAI)
+        agent = InsightsAgent(openai_client=mock_client)
+
+        for template_key in ("base", "decision", "problem", "general", "metadata_listing"):
+            assert template_key in agent.prompt_templates
