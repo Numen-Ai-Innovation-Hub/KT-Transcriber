@@ -643,10 +643,14 @@ class QueryEnricher:
             store = ChromaDBStore()
             results = store.collection.get(include=["metadatas"])
 
-            video_names = set()
-            for metadata in results["metadatas"]:
-                if metadata and "video_name" in metadata:
-                    video_names.add(metadata["video_name"])
+            raw_metas = results.get("metadatas")
+            video_names: set[str] = set()
+            for metadata in raw_metas or []:
+                if not metadata:
+                    continue
+                vname = metadata.get("video_name")
+                if isinstance(vname, str):
+                    video_names.add(vname)
 
             video_names_list = list(video_names)
             self._video_names_cache = video_names_list

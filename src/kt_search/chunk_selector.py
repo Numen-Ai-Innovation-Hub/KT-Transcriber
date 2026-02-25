@@ -56,7 +56,7 @@ class ChunkSelector:
     Ensures selected chunks provide comprehensive, non-redundant context for InsightsAgent.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Chunk Selector with quality and diversity configurations"""
         self.quality_weights = QUALITY_WEIGHTS
         self.diversity_config = DIVERSITY_CONFIG
@@ -625,7 +625,7 @@ class ChunkSelector:
 
     # PUBLIC API METHODS (for test compatibility)
     def calculate_chunk_quality(
-        self, chunk_or_metadata: dict[str, Any], query_context: dict[str, Any], content: str = None
+        self, chunk_or_metadata: dict[str, Any], query_context: dict[str, Any], content: str | None = None
     ) -> float:
         """
         Public method to calculate quality score for a chunk
@@ -686,7 +686,7 @@ class ChunkSelector:
 
 # Utility functions for external use
 def select_chunks(
-    chunks: list[dict[str, Any]], top_k: int, query_type: QueryType, query_analysis: dict[str, Any] = None
+    chunks: list[dict[str, Any]], top_k: int, query_type: QueryType, query_analysis: dict[str, Any] | None = None
 ) -> list[dict[str, Any]]:
     """Convenience function for chunk selection"""
     selector = ChunkSelector()
@@ -695,7 +695,7 @@ def select_chunks(
     return result.selected_chunks
 
 
-def calculate_quality_score(chunk: dict[str, Any], query_context: dict[str, Any] = None) -> float:
+def calculate_quality_score(chunk: dict[str, Any], query_context: dict[str, Any] | None = None) -> float:
     """Calculate quality score for a single chunk"""
     selector = ChunkSelector()
     query_context = query_context or {}

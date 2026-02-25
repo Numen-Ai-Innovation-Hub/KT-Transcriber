@@ -16,7 +16,8 @@ from utils.logger_setup import LoggerManager
 
 logger = LoggerManager.get_logger(__name__)
 
-_NORMALIZATION_PROMPT = """Você é especialista em projetos SAP. Analise o nome de uma reunião de KT (Knowledge Transfer) e extraia:
+_NORMALIZATION_PROMPT = """Você é especialista em projetos SAP.
+Analise o nome de uma reunião de KT (Knowledge Transfer) e extraia:
 
 1. Módulo(s) SAP principal(is) mencionado(s) (ex: MM, SD, FI, CO, EWM, WM)
 2. Descrição resumida do tema principal (máximo 10 palavras)
@@ -170,9 +171,29 @@ class EnhancedVideoNormalizer:
             Lista de módulos detectados.
         """
         known_modules = [
-            "MM", "SD", "FI", "CO", "HR", "PP", "PM", "QM", "WM", "EWM",
-            "TM", "GTS", "LE", "PS", "RE", "SRM", "CRM", "BW", "BI",
-            "BTP", "ABAP", "FIORI", "CPI",
+            "MM",
+            "SD",
+            "FI",
+            "CO",
+            "HR",
+            "PP",
+            "PM",
+            "QM",
+            "WM",
+            "EWM",
+            "TM",
+            "GTS",
+            "LE",
+            "PS",
+            "RE",
+            "SRM",
+            "CRM",
+            "BW",
+            "BI",
+            "BTP",
+            "ABAP",
+            "FIORI",
+            "CPI",
         ]
         video_upper = video_name.upper()
         found = []
@@ -196,6 +217,7 @@ class EnhancedVideoNormalizer:
 
         try:
             import json
+
             prompt = _NORMALIZATION_PROMPT.format(video_name=video_name)
             response = self._openai_client.chat.completions.create(
                 model=self._model,
@@ -224,12 +246,14 @@ class EnhancedVideoNormalizer:
         plan = []
         for name in video_names:
             result = self.normalize(name)
-            plan.append({
-                "original": name,
-                "normalized": result["normalized_name"],
-                "slug": result["slug"],
-                "modules": result["modules"],
-            })
+            plan.append(
+                {
+                    "original": name,
+                    "normalized": result["normalized_name"],
+                    "slug": result["slug"],
+                    "modules": result["modules"],
+                }
+            )
         return plan
 
 

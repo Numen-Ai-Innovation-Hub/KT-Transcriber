@@ -70,7 +70,7 @@ class InsightsAgent:
         logger.info(f"InsightsAgent inicializado com modelo {self.model}")
 
     def generate_direct_insight(
-        self, original_query: str, search_results: list[Any], query_type: str = None
+        self, original_query: str, search_results: list[Any], query_type: str | None = None
     ) -> DirectInsightResult | None:
         """
         Extrai insights diretos baseados nos resultados da busca
@@ -656,7 +656,9 @@ class InsightsAgent:
 
         return text
 
-    def _format_contexts_for_llm(self, search_results: list[Any], context_analysis: dict[str, Any] = None) -> str:
+    def _format_contexts_for_llm(
+        self, search_results: list[Any], context_analysis: dict[str, Any] | None = None
+    ) -> str:
         """
         Formata contextos dos resultados para envio ao LLM com filtro semântico
 
@@ -1069,7 +1071,7 @@ class InsightsAgent:
         return False
 
     def _build_specialized_prompt(
-        self, query_type: str, original_query: str, contexts: str, context_analysis: dict[str, Any] = None
+        self, query_type: str, original_query: str, contexts: str, context_analysis: dict[str, Any] | None = None
     ) -> str:
         """
         Constrói prompt especializado baseado no tipo de consulta e análise contextual
@@ -1597,15 +1599,17 @@ porém nos vídeos de KT do cliente **{found_client}**, não do **{requested_cli
 """
 
         # Extrair informações sobre a entidade dos resultados
-        entity_info = []
+        entity_info: list[str] = []
         for result in results:
             content = ""
             if isinstance(result, dict):
-                content = result.get("text", result.get("content", ""))
+                raw = result.get("text", result.get("content", ""))
+                content = raw if isinstance(raw, str) else ""
             elif hasattr(result, "content"):
-                content = getattr(result, "content", "")
+                raw = getattr(result, "content", "")
+                content = raw if isinstance(raw, str) else ""
 
-            if entity.upper() in content.upper():
+            if isinstance(content, str) and entity.upper() in content.upper():
                 # Extrair trecho relevante (primeiro parágrafo que menciona a entidade)
                 paragraphs = content.split("\n")
                 for para in paragraphs:

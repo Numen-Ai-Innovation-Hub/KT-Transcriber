@@ -370,7 +370,7 @@ class ChromaDBStore:
                     ids=ids,
                     documents=documents,
                     embeddings=cast(PyEmbeddings, embeddings),
-                    metadatas=metadatas,  # type: ignore[arg-type]
+                    metadatas=metadatas,
                 )
                 success_count += len(batch)
                 logger.info(f"Batch {i // batch_size + 1}: {len(batch)} chunks adicionados")

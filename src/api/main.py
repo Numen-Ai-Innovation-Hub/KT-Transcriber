@@ -25,6 +25,9 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from src.api.routers import health
+from src.api.routers.kt_indexing_router import router as kt_indexing_router
+from src.api.routers.kt_ingestion_router import router as kt_ingestion_router
+from src.api.routers.kt_search_router import router as kt_search_router
 from utils.exception_setup import ApplicationError
 from utils.logger_setup import get_logger
 
@@ -42,37 +45,57 @@ async def lifespan(app: FastAPI) -> Any:  # noqa: ARG001 - app usado pelo FastAP
 
     Startup:
     - Inicializa aplicação (logging, diretórios) via initialize_application()
-    - TODO: warm_up() de services com modelos pesados (elimina cold-start)
-    - TODO: ARQ pool para endpoints assíncronos
+    - Cria ARQ pool para enfileiramento de jobs (ingestion e indexação)
+    - Warm-up do KTSearchService (pré-carrega SearchEngine)
 
     Shutdown:
-    - TODO: Fechar ARQ pool se criado
+    - Fecha ARQ pool
     """
+    from arq.connections import RedisSettings, create_pool
+
+    from src.config.settings import REDIS_DB, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
     from src.config.startup import initialize_application
 
     initialize_application()
-    logger.info("Serviços inicializados com sucesso")
 
-    # TODO: warm_up() de services com modelos LLM pesados (elimina cold-start)
-    # from src.services.example_service import get_example_service
-    # get_example_service().warm_up()
+    # ARQ pool para endpoints de ingestion e indexação
+    try:
+        app.state.arq_pool = await create_pool(
+            RedisSettings(
+                host=REDIS_HOST,
+                port=REDIS_PORT,
+                password=REDIS_PASSWORD if REDIS_PASSWORD else None,
+                database=REDIS_DB,
+            )
+        )
+        logger.info(f"ARQ pool criado — Redis: {REDIS_HOST}:{REDIS_PORT}")
+    except Exception as e:
+        logger.warning(f"ARQ pool não criado (Redis indisponível): {e}. Endpoints assíncronos desabilitados.")
+        app.state.arq_pool = None
 
-    # TODO: ARQ pool para endpoints assíncronos (descomentar se usar ARQ)
-    # from arq.connections import RedisSettings, create_pool
-    # app.state.arq_pool = await create_pool(RedisSettings(...))
+    # Warm-up do SearchEngine (pré-carrega componentes RAG, elimina cold-start)
+    try:
+        from src.services.kt_search_service import get_kt_search_service
+
+        get_kt_search_service()
+        logger.info("KTSearchService inicializado com sucesso")
+    except Exception as e:
+        logger.warning(f"KTSearchService não inicializado (ChromaDB indisponível?): {e}")
+
+    logger.info("Serviços KT inicializados")
 
     yield
 
-    # TODO: Fechar ARQ pool (descomentar se usar ARQ)
-    # await app.state.arq_pool.aclose()
+    if app.state.arq_pool is not None:
+        await app.state.arq_pool.aclose()
     logger.info("Encerrando serviços da aplicação")
 
 
 # Criar app FastAPI
 app = FastAPI(
-    title="Python FastAPI Template",
+    title="KT Transcriber API",
     version="1.0.0",
-    description="Template base para projetos Python + FastAPI + ARQ + Redis",
+    description="API para ingestion, indexação e busca RAG de reuniões KT via TL:DV",
     lifespan=lifespan,
 )
 
@@ -227,12 +250,9 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
 # ════════════════════════════════════════════════════════════════════════════
 
 app.include_router(health.router)
-
-# TODO: Adicionar routers customizados aqui
-# Exemplo:
-# from src.api.routers import users, tasks
-# app.include_router(users.router, prefix="/v1/users", tags=["Users"])
-# app.include_router(tasks.router, prefix="/v1/tasks", tags=["Tasks"])
+app.include_router(kt_search_router)
+app.include_router(kt_ingestion_router)
+app.include_router(kt_indexing_router)
 
 
 # ════════════════════════════════════════════════════════════════════════════

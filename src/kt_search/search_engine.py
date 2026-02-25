@@ -12,7 +12,10 @@ import argparse
 import sys
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .insights_agent import InsightsAgent
 
 from utils.logger_setup import LoggerManager
 
@@ -52,7 +55,7 @@ class SearchEngine:
     Supports 5 RAG types: SEMANTIC, METADATA, ENTITY, TEMPORAL, CONTENT
     """
 
-    def __init__(self, verbose: bool = False):
+    def __init__(self, verbose: bool = False) -> None:
         """Initialize Search Engine with all pipeline components."""
         self.verbose = verbose
 
@@ -85,13 +88,13 @@ class SearchEngine:
 
         logger.info("Successfully integrated with existing components")
 
-    def _initialize_insights_agent(self):
+    def _initialize_insights_agent(self) -> "InsightsAgent":
         """Initialize InsightsAgent with OpenAI client from settings."""
         from .insights_agent import InsightsAgent
 
         return InsightsAgent()  # auto-inicializa internamente a partir de settings
 
-    def _show_system_stats(self):
+    def _show_system_stats(self) -> None:
         """Mostra estatísticas do sistema RAG"""
         try:
             # Get ChromaDB stats
@@ -325,7 +328,11 @@ class SearchEngine:
             return []
 
     def _execute_semantic_search(
-        self, enrichment_result: EnrichmentResult, strategy: dict[str, Any], query_type=None, query: str = ""
+        self,
+        enrichment_result: EnrichmentResult,
+        strategy: dict[str, Any],
+        query_type: QueryType | None = None,
+        query: str = "",
     ) -> list[dict[str, Any]]:
         """Execute semantic similarity search"""
 
@@ -336,9 +343,8 @@ class SearchEngine:
             raise Exception("Failed to generate query embedding")
 
         # Build filters from strategy and entities
-        filters = self._build_chromadb_filters(
-            enrichment_result.entities, strategy, query_type.value if query_type else None, query
-        )
+        qt_val: str = query_type.value if query_type else ""
+        filters = self._build_chromadb_filters(enrichment_result.entities, strategy, qt_val, query)
 
         # Calculate search limit with buffer for selection
         base_limit = strategy.get("top_k_modifier", 1.0) * SEARCH_CONFIG["default_top_k"]
@@ -406,14 +412,17 @@ class SearchEngine:
             return 500 if not has_filters else 1000  # Increased from 200 to 1000 for filtered searches
 
     def _execute_metadata_search(
-        self, enrichment_result: EnrichmentResult, strategy: dict[str, Any], query_type=None, query: str = ""
+        self,
+        enrichment_result: EnrichmentResult,
+        strategy: dict[str, Any],
+        query_type: QueryType | None = None,
+        query: str = "",
     ) -> list[dict[str, Any]]:
         """Execute metadata-only search for listings"""
 
         # Build metadata filters
-        filters = self._build_chromadb_filters(
-            enrichment_result.entities, strategy, query_type.value if query_type else None, query
-        )
+        qt_val: str = query_type.value if query_type else ""
+        filters = self._build_chromadb_filters(enrichment_result.entities, strategy, qt_val, query)
 
         # Calculate adaptive search limit based on collection size
         search_limit = self._calculate_adaptive_metadata_limit(
@@ -427,7 +436,11 @@ class SearchEngine:
         return results.get("results", [])
 
     def _execute_entity_search(
-        self, enrichment_result: EnrichmentResult, strategy: dict[str, Any], query_type=None, query: str = ""
+        self,
+        enrichment_result: EnrichmentResult,
+        strategy: dict[str, Any],
+        query_type: QueryType | None = None,
+        query: str = "",
     ) -> list[dict[str, Any]]:
         """Execute entity-focused search"""
 
@@ -443,7 +456,11 @@ class SearchEngine:
         return results.get("results", [])
 
     def _execute_temporal_search(
-        self, enrichment_result: EnrichmentResult, strategy: dict[str, Any], query_type=None, query: str = ""
+        self,
+        enrichment_result: EnrichmentResult,
+        strategy: dict[str, Any],
+        query_type: QueryType | None = None,
+        query: str = "",
     ) -> list[dict[str, Any]]:
         """Execute temporal-constrained search"""
 
@@ -467,7 +484,11 @@ class SearchEngine:
             all_results = self._apply_temporal_filter(all_results, temporal_filter)
 
         # Sort by date (most recent first)
-        sorted_results = sorted(all_results, key=lambda x: x.get("metadata", {}).get("meeting_date", ""), reverse=True)
+        def _date_key(x: dict[str, Any]) -> str:
+            val = x.get("metadata", {}).get("meeting_date", "")
+            return val if isinstance(val, str) else ""
+
+        sorted_results = sorted(all_results, key=_date_key, reverse=True)
 
         return sorted_results
 
@@ -551,7 +572,11 @@ class SearchEngine:
         return filtered_results
 
     def _execute_content_search(
-        self, enrichment_result: EnrichmentResult, strategy: dict[str, Any], query_type=None, query: str = ""
+        self,
+        enrichment_result: EnrichmentResult,
+        strategy: dict[str, Any],
+        query_type: QueryType | None = None,
+        query: str = "",
     ) -> list[dict[str, Any]]:
         """Execute enhanced content search with fuzzy matching"""
 
@@ -586,7 +611,7 @@ class SearchEngine:
             enrichment_result.entities,
             strategy,
             enhanced_terms,
-            None,
+            "",
             enrichment_result.original_query if hasattr(enrichment_result, "original_query") else "",
         )
         logger.info(f"Enhanced search filters: {filters}")
@@ -745,14 +770,13 @@ class SearchEngine:
         enrichment_result: EnrichmentResult,
         strategy: dict[str, Any],
         search_terms: list[str],
-        query_type=None,
+        query_type: QueryType | None = None,
         query: str = "",
     ) -> list[dict[str, Any]]:
         """Legacy content search implementation with transaction support."""
 
-        filters = self._build_chromadb_filters(
-            enrichment_result.entities, strategy, query_type.value if query_type else None, query
-        )
+        qt_val: str = query_type.value if query_type else ""
+        filters = self._build_chromadb_filters(enrichment_result.entities, strategy, qt_val, query)
 
         # If no client filter but has transactions, search broader
         if not filters and "transactions" in enrichment_result.entities:
@@ -991,14 +1015,10 @@ class SearchEngine:
 
             logger.debug(f"Scanning {len(all_results.get('ids', []))} chunks for term '{search_term}'")
 
-            for _i, (chunk_id, document, metadata) in enumerate(
-                zip(
-                    all_results.get("ids", []),
-                    all_results.get("documents", []),
-                    all_results.get("metadatas", []),
-                    strict=True,
-                )
-            ):
+            ids_list = all_results.get("ids") or []
+            docs_list = all_results.get("documents") or []
+            metas_list = all_results.get("metadatas") or []
+            for _i, (chunk_id, document, metadata) in enumerate(zip(ids_list, docs_list, metas_list, strict=True)):
                 # Check content
                 content_match = document and search_term_lower in document.lower()
 
@@ -1054,7 +1074,11 @@ class SearchEngine:
                         break
 
             # Sort by relevance score (highest first)
-            matching_results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
+            def _relevance_key(x: dict[str, Any]) -> float:
+                v = x.get("relevance_score", 0)
+                return v if isinstance(v, (int, float)) else 0.0
+
+            matching_results.sort(key=_relevance_key, reverse=True)
 
             logger.info(
                 f"Manual search for '{search_term}' found {len(matching_results)} matches"
@@ -1072,13 +1096,13 @@ class SearchEngine:
         entities: dict[str, Any],
         strategy: dict[str, Any],
         enhanced_terms: dict[str, Any],
-        query_type: str = None,
+        query_type: str | None = None,
         original_query: str = "",
     ) -> dict[str, Any] | None:
         """Build enhanced ChromaDB filters (ChromaDB-compatible only)"""
 
         # Use base filters only - ChromaDB doesn't support complex filters
-        filters = self._build_chromadb_filters(entities, strategy, query_type, original_query)
+        filters = self._build_chromadb_filters(entities, strategy, query_type or "", original_query)
 
         # Store KT title patterns for post-processing (not in ChromaDB filter)
         kt_title_filters = self._extract_kt_title_filter(enhanced_terms)
@@ -1117,7 +1141,11 @@ class SearchEngine:
         return None
 
     def _build_chromadb_filters(
-        self, entities: dict[str, Any], strategy: dict[str, Any], query_type: str = None, original_query: str = ""
+        self,
+        entities: dict[str, Any],
+        strategy: dict[str, Any],
+        query_type: str | None = None,
+        original_query: str = "",
     ) -> dict[str, Any] | None:
         """Build ChromaDB WHERE filters based on entities, strategy and query context"""
         filters: dict[str, Any] = {}
@@ -1126,11 +1154,12 @@ class SearchEngine:
         # For METADATA queries about clients, prioritize client filters over video filters
         # For other query types, maintain video > client hierarchy
 
-        is_metadata_client_query = query_type == "METADATA" and any(
+        qt = query_type or ""
+        is_metadata_client_query = qt == "METADATA" and any(
             term in original_query.lower() for term in ["cliente", "client", "kts do", "kts da"]
         )
 
-        is_metadata_global_query = query_type == "METADATA" and any(
+        is_metadata_global_query = qt == "METADATA" and any(
             term in original_query.lower()
             for term in ["todos", "todas", "lista todos", "base de conhecimento", "nossa base"]
         )
@@ -1200,15 +1229,16 @@ class SearchEngine:
             # Get all unique client names from ChromaDB
             all_docs = self.chromadb_manager.collection.get(include=["metadatas"])
 
-            if not all_docs or not all_docs.get("metadatas"):
+            raw_metas = all_docs.get("metadatas") if all_docs else None
+            if not all_docs or not raw_metas:
                 return [detected_client.upper()]
 
             # Extract all unique client names from the database
-            actual_clients = set()
-            for metadata in all_docs["metadatas"]:
-                client_name = metadata.get("client_name")
-                if client_name and client_name.strip():
-                    actual_clients.add(client_name.strip())
+            actual_clients: set[str] = set()
+            for metadata in raw_metas:
+                client_name_raw = metadata.get("client_name")
+                if isinstance(client_name_raw, str) and client_name_raw.strip():
+                    actual_clients.add(client_name_raw.strip())
 
             if not actual_clients:
                 return [detected_client.upper()]
@@ -1216,7 +1246,7 @@ class SearchEngine:
             # Find all variations that match the detected client
             import unicodedata
 
-            def normalize_for_comparison(text):
+            def normalize_for_comparison(text: str) -> str:
                 """Remove accents and normalize for fuzzy matching"""
                 return unicodedata.normalize("NFD", text.upper()).encode("ascii", "ignore").decode("ascii")
 
@@ -1266,25 +1296,26 @@ class SearchEngine:
             # Get all unique client names from ChromaDB
             all_docs = self.chromadb_manager.collection.get(include=["metadatas"])
 
-            if not all_docs or not all_docs.get("metadatas"):
+            raw_metas_norm = all_docs.get("metadatas") if all_docs else None
+            if not all_docs or not raw_metas_norm:
                 logger.warning("No metadata available for client normalization")
                 return detected_client.upper()
 
             # Extract all unique client names from the database
-            actual_clients = set()
-            for metadata in all_docs["metadatas"]:
-                client_name = metadata.get("client_name")
-                if client_name and client_name.strip():
-                    actual_clients.add(client_name.strip())
+            actual_clients_norm: set[str] = set()
+            for metadata in raw_metas_norm:
+                client_name_raw = metadata.get("client_name")
+                if isinstance(client_name_raw, str) and client_name_raw.strip():
+                    actual_clients_norm.add(client_name_raw.strip())
 
-            if not actual_clients:
+            if not actual_clients_norm:
                 logger.warning("No client names found in database")
                 return detected_client.upper()
 
             detected_upper = detected_client.upper().strip()
 
             # 1. Exact match (case insensitive)
-            for actual_client in actual_clients:
+            for actual_client in actual_clients_norm:
                 if actual_client.upper() == detected_upper:
                     logger.debug(f"Client exact match: {detected_client} → {actual_client}")
                     return actual_client
@@ -1292,28 +1323,27 @@ class SearchEngine:
             # 2. Fuzzy match without accents (most common issue)
             import unicodedata
 
-            def remove_accents(text):
+            def remove_accents(text: str) -> str:
                 """Remove accents from text"""
                 return unicodedata.normalize("NFD", text).encode("ascii", "ignore").decode("ascii")
 
             detected_no_accent = remove_accents(detected_upper)
 
-            for actual_client in actual_clients:
+            for actual_client in actual_clients_norm:
                 actual_no_accent = remove_accents(actual_client.upper())
                 if actual_no_accent == detected_no_accent:
                     logger.debug(f"Client accent-normalized match: {detected_client} → {actual_client}")
                     return actual_client
 
             # 3. Partial match (contains)
-            for actual_client in actual_clients:
+            for actual_client in actual_clients_norm:
                 if detected_upper in actual_client.upper() or actual_client.upper() in detected_upper:
                     logger.debug(f"Client partial match: {detected_client} → {actual_client}")
                     return actual_client
 
             # 4. No match found - return None to skip filter
-            logger.warning(
-                f"No matching client found for '{detected_client}' in database. Available: {sorted(actual_clients)}"
-            )
+            available = sorted(actual_clients_norm)
+            logger.warning(f"No matching client found for '{detected_client}' in database. Available: {available}")
             return None
 
         except Exception as e:
@@ -1477,7 +1507,7 @@ class SearchEngine:
         return details
 
     def _format_contexts_for_display(
-        self, chunks: list[dict[str, Any]], query_type: str = None
+        self, chunks: list[dict[str, Any]], query_type: str | None = None
     ) -> list[dict[str, Any]]:
         """Format contexts for user-friendly display"""
 
@@ -1587,7 +1617,7 @@ class SearchEngine:
             error_message=error_message,
         )
 
-    def _update_avg_processing_time(self, processing_time: float):
+    def _update_avg_processing_time(self, processing_time: float) -> None:
         """Update average processing time statistics"""
         current_avg = self.search_stats["avg_processing_time"]
         total_successful = self.search_stats["successful_queries"]
@@ -1601,7 +1631,7 @@ class SearchEngine:
 
     def _log_enrichment_phase(
         self, original_query: str, enrichment_result: EnrichmentResult, enrichment_time: float, show_details: bool
-    ):
+    ) -> None:
         """Log enrichment phase with rich details"""
         logger.debug(
             f"1️⃣ ENRIQUECIMENTO {'DA QUERY ' if show_details else ''}"
@@ -1665,7 +1695,7 @@ class SearchEngine:
 
     def _log_classification_phase(
         self, classification_result: ClassificationResult, classification_time: float, show_details: bool
-    ):
+    ) -> None:
         """Log classification phase with rich details"""
         logger.debug(
             f"2️⃣ CLASSIFICAÇÃO {'DE QUERY ' if show_details else ''}"
@@ -1729,7 +1759,7 @@ class SearchEngine:
         enrichment_result: EnrichmentResult,
         classification_result: ClassificationResult,
         show_details: bool,
-    ):
+    ) -> None:
         """Log ChromaDB search phase with rich details"""
         logger.debug(f"3️⃣ BUSCA {'NO ' if show_details else ''}CHROMADB | {chromadb_time:.3f}s")
 
@@ -1778,8 +1808,10 @@ class SearchEngine:
 
         for result in raw_results:
             metadata = result.get("metadata", {})
-            video_name = metadata.get("video_name", "Unknown")
-            client_name = metadata.get("client_name", "Unknown")
+            video_name_raw = metadata.get("video_name", "Unknown")
+            client_name_raw = metadata.get("client_name", "Unknown")
+            video_name = video_name_raw if isinstance(video_name_raw, str) else "Unknown"
+            client_name = client_name_raw if isinstance(client_name_raw, str) else "Unknown"
 
             if video_name != "Unknown":
                 unique_videos.add(video_name)
@@ -1847,7 +1879,7 @@ class SearchEngine:
             if client_normalization_info:
                 logger.debug(f"   🔄 Cliente: {client_normalization_info}")
 
-    def _log_client_discovery_phase(self, client_time: float, show_details: bool):
+    def _log_client_discovery_phase(self, client_time: float, show_details: bool) -> None:
         """Log client discovery phase"""
         logger.debug(f"4️⃣ DESCOBERTA {'DE CLIENTES' if show_details else 'CLIENTES'} | {client_time:.3f}s")
 
@@ -1903,7 +1935,7 @@ class SearchEngine:
         top_k: int,
         selection_time: float,
         show_details: bool,
-    ):
+    ) -> None:
         """Log chunk selection phase with rich details"""
         logger.debug(f"5️⃣ SELEÇÃO {'INTELIGENTE ' if show_details else 'CHUNKS '}| {selection_time:.3f}s")
 
@@ -1972,7 +2004,7 @@ class SearchEngine:
                 f" | Quality: {'✅' if selection_result.quality_threshold_met else '❌'}"
             )
 
-    def _log_insights_phase(self, insights_result: Any, insights_time: float, show_details: bool):
+    def _log_insights_phase(self, insights_result: Any, insights_time: float, show_details: bool) -> None:
         """Log insights generation phase with rich details"""
         logger.debug(
             f"6️⃣ {'GERAÇÃO DE ' if show_details else ''}"

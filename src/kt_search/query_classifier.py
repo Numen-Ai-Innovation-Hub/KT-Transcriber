@@ -9,12 +9,14 @@ Pipeline Position: Query Enricher → **Query Classifier** → ChromaDB Search
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import Any
 
 from utils.logger_setup import LoggerManager
 
 from .kt_search_constants import QUERY_PATTERNS
+from .query_enricher import EnrichmentResult
 
 logger = LoggerManager.get_logger(__name__)
 
@@ -54,7 +56,7 @@ class QueryClassifier:
     Uses enrichment data for more accurate classification than patterns alone.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Query Classifier with patterns and strategies"""
         self.query_patterns = QUERY_PATTERNS
         self.classification_strategies = self._load_classification_strategies()
@@ -769,25 +771,22 @@ class QueryClassifier:
         # Return constraints (already cleaned for post-processing)
         return constraints
 
-    def _get_latest_data_date(self):
+    def _get_latest_data_date(self) -> datetime:
         """Descobre automaticamente a data mais recente dos dados disponíveis"""
         try:
-            from datetime import datetime
-
-            # Importar ChromaDBManager para consultar dados
-            from ..indexing.chromadb_manager import ChromaDBManager
+            from src.kt_indexing.chromadb_store import ChromaDBStore
 
             try:
-                chromadb_manager = ChromaDBManager()
+                store = ChromaDBStore()
 
                 # Buscar algumas amostras para encontrar a data mais recente
-                results = chromadb_manager.query_metadata(
+                results = store.query_metadata(
                     where_filter=None,
                     limit=50,  # Amostra pequena mas representativa
                     include_content=False,
                 )
 
-                latest_date = None
+                latest_date: datetime | None = None
                 for result in results.get("results", []):
                     metadata = result.get("metadata", {})
                     meeting_date_str = metadata.get("meeting_date")
@@ -824,28 +823,30 @@ class QueryClassifier:
     def _has_specific_video_reference(self, query_lower: str) -> bool:
         """Verifica se query menciona vídeo específico consultando a base dinamicamente"""
         try:
-            from ..indexing.chromadb_manager import ChromaDBManager
+            from src.kt_indexing.chromadb_store import ChromaDBStore
 
             # Cache para evitar consultas repetidas
             if not hasattr(self, "_video_titles_cache"):
-                chromadb_manager = ChromaDBManager()
-                results = chromadb_manager.query_metadata(
+                store = ChromaDBStore()
+                results = store.query_metadata(
                     where_filter=None,
                     limit=50,  # Amostra representativa
                     include_content=False,
                 )
 
                 # Extrair títulos únicos dos vídeos
-                video_titles = set()
+                video_titles: set[str] = set()
                 for result in results.get("results", []):
                     metadata = result.get("metadata", {})
-                    video_name = metadata.get("video_name", "")
-                    if video_name:
-                        # Extrair palavras-chave relevantes do título
-                        title_words = video_name.lower().replace("-", " ").split()
-                        for word in title_words:
-                            if len(word) > 3 and word not in ["gravacao", "reuniao", "video"]:
-                                video_titles.add(word)
+                    video_name_raw = metadata.get("video_name", "")
+                    if not isinstance(video_name_raw, str) or not video_name_raw:
+                        continue
+                    video_name = video_name_raw
+                    # Extrair palavras-chave relevantes do título
+                    title_words = video_name.lower().replace("-", " ").split()
+                    for word in title_words:
+                        if len(word) > 3 and word not in ["gravacao", "reuniao", "video"]:
+                            video_titles.add(word)
 
                 self._video_titles_cache = video_titles
                 logger.debug(f"Cache de títulos criado: {len(video_titles)} palavras-chave")
@@ -1288,7 +1289,7 @@ class QueryClassifier:
 
 
 # Utility functions for external use
-def classify_query(query: str, enrichment_result) -> ClassificationResult:
+def classify_query(query: str, enrichment_result: EnrichmentResult) -> ClassificationResult:
     """Convenience function for query classification"""
     classifier = QueryClassifier()
     return classifier.classify_query_with_context(query, enrichment_result.entities, enrichment_result.context)

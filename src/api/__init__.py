@@ -13,6 +13,7 @@ from .main import (
 
 # Subpackages
 from . import routers
+from . import schemas
 
 __all__ = [
     "ALLOWED_ORIGINS",
@@ -22,5 +23,6 @@ __all__ = [
     "lifespan",
     "root",
     "routers",
+    "schemas",
     "validation_error_handler",
 ]

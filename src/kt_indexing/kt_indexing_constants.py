@@ -37,7 +37,8 @@ LLM_CONFIG: dict[str, Any] = {
 }
 
 # Prompt para extração de metadados via LLM
-ENHANCED_METADATA_EXTRACTION_PROMPT = """Analise o seguinte trecho de transcrição de uma reunião de KT (Knowledge Transfer) SAP e extraia metadados estruturados.
+ENHANCED_METADATA_EXTRACTION_PROMPT = """Analise o seguinte trecho de transcrição de uma reunião de KT
+(Knowledge Transfer) SAP e extraia metadados estruturados.
 
 TRECHO DA TRANSCRIÇÃO:
 {chunk_text}

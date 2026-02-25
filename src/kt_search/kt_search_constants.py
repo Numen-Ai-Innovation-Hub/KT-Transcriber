@@ -174,7 +174,7 @@ QUERY_PATTERNS = {
 # PADRÕES DE ENTIDADES
 # ════════════════════════════════════════════════════════════════════════════
 
-ENTITY_PATTERNS = {
+ENTITY_PATTERNS: dict[str, dict[str, Any]] = {
     "clients": {
         "patterns": [r"\b(víssimo|vissimo|arco|dexco|gran cru|pc\s*factory|pc_factory)\b"],
         "normalization": {

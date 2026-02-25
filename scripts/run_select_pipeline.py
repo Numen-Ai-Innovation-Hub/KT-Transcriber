@@ -29,7 +29,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from scripts.run_full_pipeline import FullPipelineRunner
+from scripts.run_full_pipeline import FullPipelineRunner  # type: ignore[attr-defined]
 from src.config.settings import TLDV_API_KEY
 from src.config.startup import initialize_application
 from src.kt_ingestion.json_consolidator import JSONConsolidator

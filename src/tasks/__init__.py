@@ -4,15 +4,21 @@
 from .arq_worker import (
     LOG_DIR,
     WorkerSettings,
-    exemplo_task,
     shutdown,
     startup,
 )
 
+# Kt Indexing Task
+from .kt_indexing_task import kt_indexing_task
+
+# Kt Ingestion Task
+from .kt_ingestion_task import kt_ingestion_task
+
 __all__ = [
     "LOG_DIR",
     "WorkerSettings",
-    "exemplo_task",
+    "kt_indexing_task",
+    "kt_ingestion_task",
     "shutdown",
     "startup",
 ]

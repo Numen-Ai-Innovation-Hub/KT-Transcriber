@@ -5,11 +5,10 @@ Gera arquivos TXT estruturados com seções de metadados TLDV e CUSTOMIZADOS.
 from pathlib import Path
 from typing import Any
 
-from utils.exception_setup import ApplicationError
-from utils.logger_setup import LoggerManager
-
 from src.kt_indexing.kt_indexing_constants import FILE_CONFIG, VALIDATION_RULES
 from src.kt_indexing.kt_indexing_utils import format_datetime, safe_filename
+from utils.exception_setup import ApplicationError
+from utils.logger_setup import LoggerManager
 
 
 class FileGenerator:

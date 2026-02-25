@@ -44,10 +44,10 @@ class ClientInfo:
 class DynamicClientManager:
     """Gerenciador dinâmico de descoberta de clientes"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.chromadb_manager = ChromaDBStore()
         self.cache: dict[str, ClientInfo] = {}
-        self.cache_timestamp = None
+        self.cache_timestamp: datetime | None = None
         self.cache_ttl = DYNAMIC_CONFIG["auto_discovery"]["cache_ttl"]
         self.min_chunks_threshold = DYNAMIC_CONFIG["auto_discovery"]["min_chunks_per_client"]
 
@@ -287,7 +287,7 @@ class DynamicClientManager:
 
         return sorted(variations)
 
-    def invalidate_cache(self):
+    def invalidate_cache(self) -> None:
         """Invalida cache forçando próxima descoberta"""
         self.cache_timestamp = None
         logger.info("Cache de clientes invalidado")
