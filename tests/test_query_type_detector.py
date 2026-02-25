@@ -1,7 +1,8 @@
 """
 Testes unitários para QueryTypeDetector.
 
-Cobre: detect_specific_kt_analysis, detect_listing_query_refined, determine_primary_theme.
+Cobre: detect_specific_kt_analysis, detect_listing_query_refined,
+determine_primary_theme, detect_query_type.
 """
 
 import pytest
@@ -158,3 +159,108 @@ class TestQueryTypeDetectorDeterminePrimaryTheme:
         detector = self._make_detector()
         result = detector.determine_primary_theme(query, [], None)
         assert result == expected
+
+
+class TestQueryTypeDetectorDetectQueryType:
+    """Testa detect_query_type — método público movido de InsightsAgent."""
+
+    def _make_detector(self) -> object:
+        from src.kt_search.query_type_detector import QueryTypeDetector
+
+        return QueryTypeDetector()
+
+    def test_highlights_summary_detectado(self) -> None:
+        """Query com 'principais pontos' retorna highlights_summary."""
+        detector = self._make_detector()
+        result = detector.detect_query_type("quais os principais pontos da reunião", [])
+        assert result == "highlights_summary"
+
+    def test_project_listing_detectado(self) -> None:
+        """Query com 'quais projetos' retorna project_listing."""
+        detector = self._make_detector()
+        result = detector.detect_query_type("quais projetos foram mencionados", [])
+        assert result == "project_listing"
+
+    def test_metadata_listing_detectado_base_conhecimento(self) -> None:
+        """'base de conhecimento' dispara metadata_listing."""
+        detector = self._make_detector()
+        result = detector.detect_query_type("o que temos na base de conhecimento", [])
+        assert result == "metadata_listing"
+
+    def test_metadata_listing_detectado_kts_disponiveis(self) -> None:
+        """'quais kts temos' dispara metadata_listing."""
+        detector = self._make_detector()
+        result = detector.detect_query_type("quais kts temos disponíveis", [])
+        assert result == "metadata_listing"
+
+    def test_analise_especifica_retorna_general(self) -> None:
+        """Query de análise específica de KT retorna 'general' (usa LLM)."""
+        detector = self._make_detector()
+        result = detector.detect_query_type("resuma os pontos do kt iflow", [])
+        assert result == "general"
+
+    def test_participants_detectado(self) -> None:
+        """'quem participou' retorna participants."""
+        detector = self._make_detector()
+        result = detector.detect_query_type("quem participou da reunião", [])
+        assert result == "participants"
+
+    def test_decision_detectado(self) -> None:
+        """Query com 'decisão' retorna decision."""
+        detector = self._make_detector()
+        result = detector.detect_query_type("qual foi a decisão tomada", [])
+        assert result == "decision"
+
+    def test_problem_detectado(self) -> None:
+        """Query com 'problema' retorna problem."""
+        detector = self._make_detector()
+        result = detector.detect_query_type("qual o problema identificado", [])
+        assert result == "problem"
+
+    def test_general_quando_sem_padrao(self) -> None:
+        """Query sem padrões específicos retorna 'general'."""
+        detector = self._make_detector()
+        result = detector.detect_query_type("como funciona o processo de aprovação", [])
+        assert result == "general"
+
+    def test_client_not_found_com_fns_fornecidas(self) -> None:
+        """Se cliente não existe na base e extract_client_fn retorna nome, retorna client_not_found.
+
+        Query escolhida pontua >= 8: "quais"(3) + "kts"(2) + "cliente"(2) + "temos"(1) = 8.
+        """
+        detector = self._make_detector()
+        result = detector.detect_query_type(
+            "quais kts temos do cliente xpto",
+            [],
+            extract_client_fn=lambda _q: "xpto",
+            client_exists_fn=lambda _c: False,
+        )
+        assert result == "client_not_found"
+
+    def test_metadata_listing_quando_cliente_existe(self) -> None:
+        """Se cliente existe na base, não retorna client_not_found — retorna metadata_listing."""
+        detector = self._make_detector()
+        result = detector.detect_query_type(
+            "quais kts temos do cliente dexco",
+            [],
+            extract_client_fn=lambda _q: "dexco",
+            client_exists_fn=lambda _c: True,
+        )
+        assert result == "metadata_listing"
+
+    def test_sem_extract_fn_nao_verifica_cliente(self) -> None:
+        """Sem extract_client_fn, a verificação de cliente é pulada — não levanta erro."""
+        detector = self._make_detector()
+        result = detector.detect_query_type(
+            "quais kts temos do cliente xpto",
+            [],
+        )
+        # Sem as fns, retorna metadata_listing (não verifica existência do cliente)
+        assert result == "metadata_listing"
+
+    def test_metadata_listing_via_score_multicamada(self) -> None:
+        """Query com múltiplas palavras de listagem atinge score >= 8."""
+        detector = self._make_detector()
+        # "liste" (3) + "kts" (2) + "temos" (1) + "base" (1) + "conhecimento" (1) = 8
+        result = detector.detect_query_type("liste os kts que temos na base de conhecimento", [])
+        assert result == "metadata_listing"

@@ -7,6 +7,7 @@ sem nenhuma dependência de LLM, ChromaDB ou estado de instância.
 """
 
 import re
+from collections.abc import Callable
 from typing import Any
 
 
@@ -110,6 +111,172 @@ class QueryTypeDetector:
                 return True
 
         return False
+
+    # ════════════════════════════════════════════════════════════════════════
+    # Determinação do tema principal
+    # ════════════════════════════════════════════════════════════════════════
+
+    # ════════════════════════════════════════════════════════════════════════
+    # Detecção de tipo de query para seleção de prompt especializado
+    # ════════════════════════════════════════════════════════════════════════
+
+    def detect_query_type(
+        self,
+        query: str,
+        results: list[Any],
+        extract_client_fn: Callable[[str], str | None] | None = None,
+        client_exists_fn: Callable[[str], bool] | None = None,
+    ) -> str:
+        """
+        Detecta o tipo de consulta para usar prompt especializado no InsightsAgent.
+
+        Classifica em: 'decision', 'problem', 'metadata_listing', 'participants',
+        'highlights_summary', 'project_listing', 'client_not_found', 'general'.
+
+        Args:
+            query: Pergunta original.
+            results: Resultados da busca ChromaDB.
+            extract_client_fn: Função opcional para extrair nome de cliente da query.
+                Assinatura: (query_lower: str) -> str | None.
+            client_exists_fn: Função opcional para verificar se cliente existe na base.
+                Assinatura: (client_name: str) -> bool.
+
+        Returns:
+            String com tipo detectado.
+        """
+        query_lower = query.lower()
+
+        # Detectar consultas de principais pontos/highlights
+        highlights_keywords = [
+            "principais pontos",
+            "pontos importantes",
+            "resumo da reunião",
+            "highlights",
+            "pontos-chave",
+            "tópicos principais",
+        ]
+        if any(keyword in query_lower for keyword in highlights_keywords):
+            return "highlights_summary"
+
+        # Detectar consultas específicas sobre projetos
+        project_keywords = ["quais projetos", "projetos foram", "projetos mencionados", "lista de projetos"]
+        if any(keyword in query_lower for keyword in project_keywords):
+            return "project_listing"
+
+        # Detectar consultas de metadados/listagem — expandido sem hardcoding
+        metadata_keywords = [
+            "quais", "que", "o que",
+            "liste", "listar", "enumere", "enumerar", "mostre", "mostrar",
+            "exiba", "exibir", "apresente", "apresentar",
+            "listagem", "lista", "relação", "catálogo", "inventário", "índice",
+            "vídeos", "videos", "kts", "reuniões", "reunioes", "meetings",
+            "clientes", "projetos", "arquivos",
+            "temos", "disponíveis", "disponivel", "existem", "possuímos",
+            "temos acesso", "base", "conhecimento",
+            "informações", "informacoes", "dados", "conteúdo", "conteudo", "material", "nomes",
+        ]
+        if any(keyword in query_lower for keyword in metadata_keywords):
+            # CAMADA 1: padrões legados
+            legacy_patterns = [
+                "liste" in query_lower
+                and ("vídeos" in query_lower or "kts" in query_lower or "reuniões" in query_lower),
+                "mostre" in query_lower and ("vídeos" in query_lower or "kts" in query_lower),
+                "quais" in query_lower
+                and ("kts" in query_lower or "reuniões" in query_lower or "vídeos" in query_lower),
+                "temos" in query_lower and "disponíveis" in query_lower,
+                "base" in query_lower and "conhecimento" in query_lower,
+            ]
+
+            # CAMADA 2: regex flexível
+            flexible_patterns = [
+                r"\b(quais?|que)\s+.*\b(nomes?|clientes?)\b.*\b(temos|kt|informações?)",
+                r"\bnomes?\s+.*\bclientes?\b.*\b(kt|informações?)\b",
+                r"\btemos\s+.*\bclientes?\b.*\b(base|conhecimento)\b",
+                r"\bclientes?\s+.*\b(disponíveis?|temos|base|conhecimento)\b",
+                r"\bliste?\s+.*\b(clientes?|kts?|documentos?|vídeos?)\b",
+                r"\b(quais?|que)\s+.*\b(kts?|documentos?|vídeos?)\s+.*\btemos\b",
+                r"\b.*\bbase\s+.*\bconhecimento\b.*\bclientes?\b",
+                r"\btemos\s+.*\binformações?\b.*\bclientes?\b",
+            ]
+
+            # CAMADA 3: pontuação por palavras-chave
+            listing_score = 0
+            action_verbs = ["liste", "listar", "quais", "que", "mostre", "exiba"]
+            entities = ["clientes", "cliente", "kts", "kt", "documentos", "vídeos"]
+            context_words = ["temos", "disponíveis", "base", "conhecimento", "informações", "nomes"]
+
+            words = query_lower.split()
+            for verb in action_verbs:
+                if any(verb in word for word in words):
+                    listing_score += 3
+            for entity in entities:
+                if any(entity in word for word in words):
+                    listing_score += 2
+            for context in context_words:
+                if any(context in word for word in words):
+                    listing_score += 1
+
+            is_listing_query = (
+                any(legacy_patterns)
+                or any(re.search(pattern, query_lower) for pattern in flexible_patterns)
+                or listing_score >= 8
+            )
+
+            # Verificar análise específica vs listagem genérica
+            is_specific_kt_analysis = self.detect_specific_kt_analysis(query_lower)
+
+            if is_listing_query and not is_specific_kt_analysis:
+                # Verificar cliente inexistente antes do fast-track
+                if "cliente" in query_lower and extract_client_fn is not None and client_exists_fn is not None:
+                    client_mentioned = extract_client_fn(query_lower)
+                    if client_mentioned and not client_exists_fn(client_mentioned):
+                        return "client_not_found"
+
+                return "metadata_listing"
+            elif is_specific_kt_analysis:
+                return "general"  # Análise específica → usa LLM
+
+            # Verificar se resultados são do tipo metadata
+            if results:
+                for result in results:
+                    search_result = getattr(result, "original_result", result)
+                    content_type = getattr(search_result, "content_type", "")
+                    category = getattr(search_result, "category", "")
+                    if content_type == "metadata" or category == "metadados":
+                        return "metadata_listing"
+
+                # Fallback inteligente: resultados suficientes + query sobre vídeos/KTs
+                if len(results) >= 5:
+                    video_related = any(
+                        term in query_lower for term in ["vídeos", "videos", "kts", "reuniões", "meetings"]
+                    )
+                    if video_related:
+                        return "metadata_listing"
+
+        # Detectar participantes
+        participant_keywords = ["quem participou", "participantes", "quem estava", "pessoas que"]
+        if any(keyword in query_lower for keyword in participant_keywords):
+            return "participants"
+
+        # Detectar decisões
+        decision_keywords = ["decisão", "decidido", "aprovado", "definido", "acordo", "resolução"]
+        if any(keyword in query_lower for keyword in decision_keywords):
+            return "decision"
+
+        # Detectar problemas
+        problem_keywords = ["problema", "erro", "falha", "dificuldade", "issue", "bug", "crítico"]
+        if any(keyword in query_lower for keyword in problem_keywords):
+            return "problem"
+
+        # Analisar categorias dos resultados
+        if results:
+            categories = [getattr(r, "category", "geral") for r in results]
+            if categories.count("decisao") > len(categories) * 0.6:
+                return "decision"
+            if categories.count("problema") > len(categories) * 0.6:
+                return "problem"
+
+        return "general"
 
     # ════════════════════════════════════════════════════════════════════════
     # Determinação do tema principal

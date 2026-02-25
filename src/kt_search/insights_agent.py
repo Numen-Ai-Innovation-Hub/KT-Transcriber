@@ -3,7 +3,6 @@ Insights Agent - Agente que extrai insights diretos baseados nos resultados da b
 Analisa contextos encontrados e gera insights objetivos para responder perguntas
 """
 
-import re
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -205,212 +204,24 @@ class InsightsAgent:
 
     def _detect_query_type(self, query: str, results: list[Any]) -> str:
         """
-        Detecta o tipo de consulta para usar prompt especializado
+        Detecta o tipo de consulta para usar prompt especializado.
+
+        Delega para QueryTypeDetector.detect_query_type(), passando as funções
+        de extração e verificação de cliente como callables.
 
         Args:
-            query: Pergunta original
-            results: Resultados da busca
+            query: Pergunta original.
+            results: Resultados da busca.
 
         Returns:
-            Tipo detectado: 'decision', 'problem', 'metadata_listing', 'participants', 'general'
+            Tipo detectado: 'decision', 'problem', 'metadata_listing', 'participants', 'general', etc.
         """
-        query_lower = query.lower()
-
-        # 🆕 Detectar consultas de principais pontos/highlights
-        highlights_keywords = [
-            "principais pontos",
-            "pontos importantes",
-            "resumo da reunião",
-            "highlights",
-            "pontos-chave",
-            "tópicos principais",
-        ]
-        if any(keyword in query_lower for keyword in highlights_keywords):
-            return "highlights_summary"
-
-        # Detectar consultas específicas sobre projetos
-        project_keywords = ["quais projetos", "projetos foram", "projetos mencionados", "lista de projetos"]
-        if any(keyword in query_lower for keyword in project_keywords):
-            return "project_listing"
-
-        # Detectar consultas de metadados/listagem - EXPANDIDO SEM HARDCODING
-        metadata_keywords = [
-            # Palavras interrogativas
-            "quais",
-            "que",
-            "o que",
-            # Verbos de listagem/exibição
-            "liste",
-            "listar",
-            "enumere",
-            "enumerar",
-            "mostre",
-            "mostrar",
-            "exiba",
-            "exibir",
-            "apresente",
-            "apresentar",
-            # Substantivos relacionados
-            "listagem",
-            "lista",
-            "relação",
-            "catálogo",
-            "inventário",
-            "índice",
-            # Objetos específicos (genéricos)
-            "vídeos",
-            "videos",
-            "kts",
-            "reuniões",
-            "reunioes",
-            "meetings",
-            "clientes",
-            "projetos",
-            "arquivos",
-            # Expressões sobre disponibilidade
-            "temos",
-            "disponíveis",
-            "disponivel",
-            "existem",
-            "possuímos",
-            "temos acesso",
-            "base",
-            "conhecimento",
-            # Palavras de informação
-            "informações",
-            "informacoes",
-            "dados",
-            "conteúdo",
-            "conteudo",
-            "material",
-            "nomes",
-        ]
-        if any(keyword in query_lower for keyword in metadata_keywords):
-            # 🚀 SOLUÇÃO GENÉRICA MULTICAMADA: Template detection robusto e escalável
-
-            # CAMADA 1: Manter padrões existentes (100% compatibilidade)
-            legacy_patterns = [
-                "liste" in query_lower
-                and ("vídeos" in query_lower or "kts" in query_lower or "reuniões" in query_lower),
-                "mostre" in query_lower and ("vídeos" in query_lower or "kts" in query_lower),
-                "quais" in query_lower
-                and ("kts" in query_lower or "reuniões" in query_lower or "vídeos" in query_lower),
-                "temos" in query_lower and "disponíveis" in query_lower,
-                "base" in query_lower and "conhecimento" in query_lower,
-            ]
-
-            # CAMADA 2: Pattern matching inteligente com regex flexível
-            flexible_patterns = [
-                # Padrões para clientes
-                r"\b(quais?|que)\s+.*\b(nomes?|clientes?)\b.*\b(temos|kt|informações?)",
-                r"\bnomes?\s+.*\bclientes?\b.*\b(kt|informações?)\b",
-                r"\btemos\s+.*\bclientes?\b.*\b(base|conhecimento)\b",
-                r"\bclientes?\s+.*\b(disponíveis?|temos|base|conhecimento)\b",
-                # Padrões para listagens gerais
-                r"\bliste?\s+.*\b(clientes?|kts?|documentos?|vídeos?)\b",
-                r"\b(quais?|que)\s+.*\b(kts?|documentos?|vídeos?)\s+.*\btemos\b",
-                # Padrões para base de conhecimento
-                r"\b.*\bbase\s+.*\bconhecimento\b.*\bclientes?\b",
-                r"\btemos\s+.*\binformações?\b.*\bclientes?\b",
-            ]
-
-            # CAMADA 3: Análise por pontuação de palavras-chave
-            listing_score = 0
-            action_verbs = ["liste", "listar", "quais", "que", "mostre", "exiba"]
-            entities = ["clientes", "cliente", "kts", "kt", "documentos", "vídeos"]
-            context_words = ["temos", "disponíveis", "base", "conhecimento", "informações", "nomes"]
-
-            words = query_lower.split()
-            for verb in action_verbs:
-                if any(verb in word for word in words):
-                    listing_score += 3
-
-            for entity in entities:
-                if any(entity in word for word in words):
-                    listing_score += 2
-
-            for context in context_words:
-                if any(context in word for word in words):
-                    listing_score += 1
-
-            # VALIDAÇÃO: Aplicar detecção multicamada com threshold mais rigoroso
-            is_listing_query = (
-                any(legacy_patterns)  # Camada 1: Compatibilidade
-                or any(re.search(pattern, query_lower) for pattern in flexible_patterns)  # Camada 2: Regex
-                or listing_score >= 8  # Camada 3: Score threshold mais rigoroso (8.0 vs 5.0 anterior)
-            )
-
-            # 🚨 PROBLEMA 3 FIX: Detectar análise específica vs listagem genérica
-            is_specific_kt_analysis = self._query_type_detector.detect_specific_kt_analysis(query_lower)
-
-            if is_listing_query and not is_specific_kt_analysis:
-                # 🚨 P1-1 FIX: Validar cliente inexistente antes do fast-track
-                if "cliente" in query_lower:
-                    client_mentioned = self._processors.extract_client_from_query(query_lower)
-                    if client_mentioned and not self._client_exists_in_base(client_mentioned):
-                        logger.info(f"🚫 Cliente inexistente detectado: {client_mentioned}")
-                        logger.info("   🎯 Template alterado: metadata_listing → client_not_found")
-                        return "client_not_found"
-
-                logger.info(
-                    f"🎯 TEMPLATE DETECTION: Query clara de metadata listing detectada: '{query_lower[:50]}...'"
-                )
-                regex_match = any(re.search(pattern, query_lower) for pattern in flexible_patterns)
-                logger.info(f"   📊 Score: {listing_score}, Legacy: {any(legacy_patterns)}, Regex: {regex_match}")
-                return "metadata_listing"
-            elif is_specific_kt_analysis:
-                logger.info("🔍 SPECIFIC KT ANALYSIS: Detectada análise específica - usando LLM em vez de fast-track")
-                logger.info(f"   📋 Query: '{query_lower[:50]}...' requer análise LLM")
-                return "general"  # Use LLM analysis instead of fast-track
-
-            # Verificar se resultados são do tipo metadata (suporta ContextualizedResult)
-            if results:
-                for result in results:
-                    # Verificar se é ContextualizedResult ou SearchResult direto
-                    search_result = getattr(result, "original_result", result)
-                    content_type = getattr(search_result, "content_type", "")
-                    category = getattr(search_result, "category", "")
-
-                    if content_type == "metadata" or category == "metadados":
-                        return "metadata_listing"
-
-                # 🔧 FALLBACK INTELIGENTE: Se não há metadata explícita mas query pede listagem de vídeos/KTs
-                # e encontramos resultados, assumir que é metadata listing
-                if len(results) >= 5:  # Threshold razoável para listagem
-                    video_related = any(
-                        term in query_lower for term in ["vídeos", "videos", "kts", "reuniões", "meetings"]
-                    )
-                    if video_related:
-                        logger.info(
-                            f"🔧 FALLBACK TEMPLATE: {len(results)} resultados"
-                            " + query relacionada a vídeos → metadata_listing"
-                        )
-                        return "metadata_listing"
-
-        # Detectar consultas sobre participantes
-        participant_keywords = ["quem participou", "participantes", "quem estava", "pessoas que"]
-        if any(keyword in query_lower for keyword in participant_keywords):
-            return "participants"
-
-        # Detectar consultas sobre decisões
-        decision_keywords = ["decisão", "decidido", "aprovado", "definido", "acordo", "resolução"]
-        if any(keyword in query_lower for keyword in decision_keywords):
-            return "decision"
-
-        # Detectar consultas sobre problemas
-        problem_keywords = ["problema", "erro", "falha", "dificuldade", "issue", "bug", "crítico"]
-        if any(keyword in query_lower for keyword in problem_keywords):
-            return "problem"
-
-        # Analisar categorias dos resultados
-        if results:
-            categories = [getattr(r, "category", "geral") for r in results]
-            if categories.count("decisao") > len(categories) * 0.6:
-                return "decision"
-            if categories.count("problema") > len(categories) * 0.6:
-                return "problem"
-
-        return "general"
+        return self._query_type_detector.detect_query_type(
+            query,
+            results,
+            extract_client_fn=self._processors.extract_client_from_query,
+            client_exists_fn=self._client_exists_in_base,
+        )
 
     def _build_specialized_prompt(
         self, query_type: str, original_query: str, contexts: str, context_analysis: dict[str, Any] | None = None

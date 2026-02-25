@@ -199,6 +199,36 @@ class TestSearchResponseBuilderCreateClientNotFoundResponse:
         result = builder.create_client_not_found_response("query", time.time())
         assert result.query_type == "EARLY_EXIT"
 
+    def test_sem_clientes_disponiveis_mensagem_generica(self) -> None:
+        """Sem available_clients, resposta usa mensagem genérica sem listar clientes."""
+        builder = self._make_builder()
+        result = builder.create_client_not_found_response("query", time.time(), available_clients=None)
+        answer = result.intelligent_response["answer"]
+        # Não deve listar clientes específicos
+        assert "ARCO" not in answer
+        assert "DEXCO" not in answer
+        assert "não encontrado" in answer.lower()
+
+    def test_com_clientes_disponiveis_lista_todos(self) -> None:
+        """Com available_clients, resposta lista os clientes disponíveis."""
+        builder = self._make_builder()
+        clientes = ["DEXCO", "ARCO"]
+        result = builder.create_client_not_found_response("query", time.time(), available_clients=clientes)
+        answer = result.intelligent_response["answer"]
+        assert "DEXCO" in answer
+        assert "ARCO" in answer
+
+    def test_com_clientes_disponiveis_ordenados(self) -> None:
+        """Clientes são exibidos em ordem alfabética."""
+        builder = self._make_builder()
+        clientes = ["DEXCO", "ARCO", "VISSIMO"]
+        result = builder.create_client_not_found_response("query", time.time(), available_clients=clientes)
+        answer = result.intelligent_response["answer"]
+        pos_arco = answer.index("ARCO")
+        pos_dexco = answer.index("DEXCO")
+        pos_vissimo = answer.index("VISSIMO")
+        assert pos_arco < pos_dexco < pos_vissimo
+
 
 class TestSearchResponseBuilderFormatContexts:
     """Testa format_contexts_for_display e format_metadata_listing_display."""

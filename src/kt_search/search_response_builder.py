@@ -96,18 +96,32 @@ class SearchResponseBuilder:
             error_message=error_message,
         )
 
-    def create_client_not_found_response(self, query: str, start_time: float) -> SearchResponse:
-        """Cria resposta early-exit para cliente inexistente."""
+    def create_client_not_found_response(
+        self, query: str, start_time: float, available_clients: list[str] | None = None
+    ) -> SearchResponse:
+        """Cria resposta early-exit para cliente inexistente.
+
+        Args:
+            query: Query original do usuário.
+            start_time: Timestamp de início do pipeline.
+            available_clients: Lista de clientes descobertos dinamicamente. Se None,
+                omite a listagem de disponíveis na resposta.
+        """
         processing_time = time.time() - start_time
 
-        available_clients = ["ARCO", "DEXCO", "PC_FACTORY", "VÍSSIMO"]
-        response_text = "**Cliente não encontrado na base de conhecimento.**\n"
-        response_text += "**Clientes disponíveis:**\n"
-        for client in available_clients:
-            response_text += f"• {client}\n"
-        response_text += (
-            "**Sugestão:** Verifique a grafia do nome do cliente ou escolha um dos clientes listados acima."
-        )
+        if available_clients:
+            response_text = "**Cliente não encontrado na base de conhecimento.**\n"
+            response_text += "**Clientes disponíveis:**\n"
+            for client in sorted(available_clients):
+                response_text += f"• {client}\n"
+            response_text += (
+                "**Sugestão:** Verifique a grafia do nome do cliente ou escolha um dos clientes listados acima."
+            )
+        else:
+            response_text = (
+                "**Cliente não encontrado na base de conhecimento.**\n"
+                "**Sugestão:** Verifique a grafia do nome do cliente e tente novamente."
+            )
 
         return SearchResponse(
             intelligent_response={

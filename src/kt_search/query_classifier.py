@@ -86,6 +86,11 @@ class QueryClassifier:
             "conteúdo",
             "explicadas no",
             "abordados no",
+            # Formas singulares — cobrem "o que foi discutido/abordado/explicado"
+            "foi discutido",
+            "foi abordado",
+            "foi explicado",
+            "o que foi",
         ]
 
         self.real_temporal_indicators = [
@@ -210,7 +215,7 @@ class QueryClassifier:
         kt_detection = self._detect_specific_kt_query(query)
 
         # 3. Apply override based on detection
-        if kt_detection["is_specific_kt"] and kt_detection["confidence"] >= 0.7:
+        if kt_detection["is_specific_kt"] and kt_detection["confidence"] >= 0.3:
             logger.info(f"🎯 KT ESPECÍFICO detectado: {query}")
             logger.info(f"   📋 Título extraído: {kt_detection.get('kt_title_extracted')}")
             logger.info(f"   📊 Confiança: {kt_detection['confidence']:.2f}")
@@ -242,6 +247,12 @@ class QueryClassifier:
                     "identificados",
                     "mencionados",
                     "discutidos",
+                    # Formas singulares do passivo
+                    "foi discutido",
+                    "foi abordado",
+                    "foi explicado",
+                    "foi apresentado",
+                    "discutido",
                 ]
             )
 
@@ -1017,6 +1028,13 @@ class QueryClassifier:
             "informações sobre": 0.85,
             "como funciona": 0.9,
             "como foram": 0.85,
+            # Formas singulares do passivo — cobrem "o que foi discutido/abordado/explicado"
+            "o que foi": 0.85,
+            "foi discutido": 0.9,
+            "discutido": 0.75,
+            "foi abordado": 0.9,
+            "foi apresentado": 0.85,
+            "foi explicado": 0.85,
             "o que sabemos": 0.9,
             "sabemos sobre": 0.9,
             "temos de informação": 0.95,

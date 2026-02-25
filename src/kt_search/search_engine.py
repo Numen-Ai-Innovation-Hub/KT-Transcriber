@@ -182,7 +182,15 @@ class SearchEngine:
             # 🚨 P1-1 FIX: Validar cliente inexistente ANTES do ChromaDB search
             if self._response_builder.should_stop_for_nonexistent_client(query):
                 logger.info("🚫 Cliente inexistente detectado - parando pipeline")
-                return self._response_builder.create_client_not_found_response(query, start_time)
+                discovered_clients: list[str] = []
+                try:
+                    discovery = self.dynamic_client_manager.discover_clients()
+                    discovered_clients = list(discovery.keys())
+                except Exception as e:
+                    logger.warning(f"Não foi possível descobrir clientes para resposta de erro: {e}")
+                return self._response_builder.create_client_not_found_response(
+                    query, start_time, discovered_clients
+                )
 
             # PHASE 3: ChromaDB Search
             chromadb_start = time.time()

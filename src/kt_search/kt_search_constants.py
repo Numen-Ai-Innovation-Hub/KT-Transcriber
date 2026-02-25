@@ -123,9 +123,17 @@ QUERY_PATTERNS = {
         "o que sabemos",
         "sabemos sobre",
         "temos de informação",
+        # Formas plurais
         "discutidos",
         "pontos discutidos",
         "foram discutidos",
+        # Formas singulares — cobrem "o que foi discutido/abordado/apresentado/explicado"
+        "discutido",
+        "foi discutido",
+        "foi abordado",
+        "foi apresentado",
+        "foi explicado",
+        "o que foi",
     ],
     "METADATA": [
         "liste",
