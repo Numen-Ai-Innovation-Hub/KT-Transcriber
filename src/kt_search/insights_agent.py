@@ -83,9 +83,9 @@ class InsightsAgent:
             DirectInsightResult com insight gerado ou None se falhou
         """
         # Cache de insights para performance
-        import hashlib
+        from utils.hash_manager import get_hash_manager
 
-        cache_key = hashlib.md5(f"{original_query}_{len(search_results)}".encode()).hexdigest()
+        cache_key = get_hash_manager().generate_content_hash(f"{original_query}_{len(search_results)}")
         if cache_key in self._insights_cache:
             logger.info("Insight encontrado no cache - retornando imediatamente")
             return self._insights_cache[cache_key]

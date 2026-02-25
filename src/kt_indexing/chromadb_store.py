@@ -13,7 +13,7 @@ from typing import Any, cast
 
 import chromadb
 import openai
-from chromadb.api.types import Include, PyEmbeddings
+from chromadb.api.types import Include, Metadatas, PyEmbeddings
 
 from src.config.settings import DIRECTORY_PATHS, OPENAI_API_KEY
 from src.kt_indexing.kt_indexing_constants import CHROMADB_CONFIG, OPENAI_CONFIG
@@ -354,7 +354,7 @@ class ChromaDBStore:
                 ids = []
                 documents = []
                 embeddings = []
-                metadatas = []
+                metadatas: Metadatas = []
 
                 for chunk in batch:
                     ids.append(chunk["id"])

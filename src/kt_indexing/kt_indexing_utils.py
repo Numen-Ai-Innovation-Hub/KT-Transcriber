@@ -223,21 +223,23 @@ def calculate_estimated_processing_time(segment_count: int, rate_limit_delay: fl
 def extract_enriched_tldv_fields(meeting_data: dict[str, Any]) -> dict[str, Any]:
     """Extrai campos enriquecidos dos dados TL:DV para metadados.
 
+    Espera formato flat produzido por JSONConsolidator:
+    campos video_name, meeting_url, happened_at, duration, organizer, highlights na raiz.
+
     Args:
-        meeting_data: Dados completos da reunião TL:DV.
+        meeting_data: JSON consolidado da reunião (formato flat).
 
     Returns:
         Dicionário com campos extraídos.
     """
-    meeting_info = meeting_data.get("meeting", {})
     highlights = meeting_data.get("highlights", [])
 
     return {
-        "original_url": meeting_info.get("url", ""),
-        "meeting_date": _extract_date_from_iso(meeting_info.get("happened_at", "")),
-        "duration_seconds": meeting_info.get("duration", 0),
+        "original_url": meeting_data.get("meeting_url", ""),
+        "meeting_date": _extract_date_from_iso(meeting_data.get("happened_at", "")),
+        "duration_seconds": meeting_data.get("duration", 0),
         "highlights_summary": _build_highlights_summary(highlights),
-        "organizer": _extract_organizer_name(meeting_info.get("organizer")),
+        "organizer": _extract_organizer_name(meeting_data.get("organizer")),
     }
 
 
@@ -339,7 +341,8 @@ def _extract_date_from_iso(iso_string: str) -> str:
         return ""
     try:
         return iso_string[:10]  # YYYY-MM-DD
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Falha ao extrair data de '{iso_string}': {e}")
         return ""
 
 

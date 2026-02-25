@@ -5,12 +5,11 @@ Este arquivo contém fixtures compartilhados entre todos os testes do projeto.
 """
 
 import os
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-
 
 # ════════════════════════════════════════════════════════════════════════════
 # FASTAPI CLIENT FIXTURE
@@ -72,17 +71,11 @@ def isolated_test_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Gener
     # DIRECTORY_PATHS em src/config/settings.py.
     # Ao adicionar/renomear chave em DIRECTORY_PATHS → atualizar aqui também.
     # Chaves inventadas fazem o monkeypatch silenciar erros reais de path.
-    #
-    # EXEMPLO (adaptar para as chaves reais do projeto):
-    # temp_dirs = {
-    #     "certifications": tmp_path / "certifications",
-    #     "extracted": tmp_path / "extracted",
-    #     "vector_db": tmp_path / "vector_db",
-    #     "sqlite_db": tmp_path / "sqlite_db",
-    # }
-    #
-    # TODO: Substituir pelas chaves reais de DIRECTORY_PATHS deste projeto.
-    temp_dirs: dict[str, Path] = {}
+    temp_dirs: dict[str, Path] = {
+        "sqlite_db": tmp_path / "sqlite_db",
+        "vector_db": tmp_path / "vector_db",
+        "transcriptions": tmp_path / "transcriptions",
+    }
 
     for temp_dir in temp_dirs.values():
         temp_dir.mkdir(parents=True, exist_ok=True)
@@ -128,7 +121,9 @@ def require_redis() -> None:
         )
         r.ping()
     except Exception as e:
-        pytest.skip(f"Redis não disponível em {REDIS_HOST}:{REDIS_PORT} — {e}. Configure .env com credenciais Redis Cloud.")
+        pytest.skip(
+            f"Redis não disponível em {REDIS_HOST}:{REDIS_PORT} — {e}. Configure .env com credenciais Redis Cloud."
+        )
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -150,12 +145,13 @@ def _reset_all_singletons() -> None:
             service = get_my_service()
             # ... teste ...
     """
-    # TODO: Adicionar reset de singletons conforme projeto cresce
-    # Exemplo:
-    # from src.services.my_service import MyService
-    # MyService._instance = None
+    from src.services.kt_indexing_service import KTIndexingService
+    from src.services.kt_ingestion_service import KTIngestionService
+    from src.services.kt_search_service import KTSearchService
 
-    pass  # Placeholder para quando houver services
+    KTIngestionService._instance = None  # type: ignore[attr-defined]
+    KTIndexingService._instance = None  # type: ignore[attr-defined]
+    KTSearchService._instance = None  # type: ignore[attr-defined]
 
 
 # ════════════════════════════════════════════════════════════════════════════

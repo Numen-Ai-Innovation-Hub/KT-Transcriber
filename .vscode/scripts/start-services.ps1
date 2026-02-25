@@ -4,8 +4,9 @@
 # Inicia FastAPI + ARQ Worker. Redis Cloud e usado (configurado no .env).
 #
 # PREREQUISITOS:
-#   - .venv configurado (via ensure-environment.ps1)
+#   - uv instalado no sistema (pip install uv)
 #   - .env configurado com credenciais Redis Cloud (REDIS_HOST, REDIS_PORT, REDIS_PASSWORD)
+#   - .venv sera criado automaticamente com uv sync --group dev se nao existir
 #
 # USO:
 #   .\.vscode\scripts\start-services.ps1
@@ -77,12 +78,25 @@ if (-not (Test-Path $EnvFile)) {
 }
 Write-Info "Arquivo .env encontrado"
 
-# Ambiente virtual
+# Ambiente virtual — cria automaticamente se nao existir
 if (-not (Test-VenvExists -RepoPath $RepoPath)) {
-    Write-Error-Message "Ambiente virtual nao encontrado!"
-    Write-Error-Message "Execute ensure-environment.ps1 primeiro ou reabra o VSCode"
-    Read-Host "Pressione ENTER para sair"
-    exit 1
+    Write-Info "Ambiente virtual nao encontrado — criando com uv sync..."
+    $uvExe = Get-ToolPath -CommandName "uv" -FallbackPath (Join-Path $env:APPDATA "Python\Python312\Scripts\uv.exe")
+    if (-not $uvExe) {
+        Write-Error-Message "uv nao encontrado! Instale com: pip install uv"
+        Read-Host "Pressione ENTER para sair"
+        exit 1
+    }
+    Push-Location $RepoPath
+    & $uvExe sync --group dev
+    $exitCode = $LASTEXITCODE
+    Pop-Location
+    if ($exitCode -ne 0) {
+        Write-Error-Message "Falha ao criar ambiente virtual com uv sync --group dev"
+        Read-Host "Pressione ENTER para sair"
+        exit 1
+    }
+    Write-Info "Ambiente virtual criado com sucesso"
 }
 Write-Info "Ambiente virtual encontrado"
 
@@ -102,7 +116,7 @@ if ($WtPath -and (-not $env:WT_SESSION)) {
     [System.Environment]::Exit(0)
 }
 
-$utf8Cmd = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;"
+$utf8Cmd = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; `$env:PYTHONUTF8 = '1'; `$env:PYTHONIOENCODING = 'utf-8';"
 
 if ($WtPath) {
     Write-Info "Windows Terminal detectado - iniciando servicos em abas"

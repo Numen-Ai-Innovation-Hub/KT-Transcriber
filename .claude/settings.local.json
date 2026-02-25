@@ -3,7 +3,11 @@
     "allow": [
       "Bash(uv run:*)",
       "Bash(python -c \":*)",
-      "Bash(.venv/Scripts/python.exe -c \"from src.api.main import app; print\\(''OK — app importado sem crash''\\)\")"
+      "Bash(.venv/Scripts/python.exe -c \"from src.api.main import app; print\\(''OK — app importado sem crash''\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"from chromadb.api.types import Metadata, Metadatas; print\\(''OK''\\)\")",
+      "Bash(grep:*)",
+      "Bash(echo === except Exception bodies ===:*)",
+      "Bash(echo:*)"
     ]
   }
 }

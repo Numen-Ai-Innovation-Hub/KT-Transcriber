@@ -177,8 +177,14 @@ class IndexingEngine:
         start_time = time.time()
         try:
             video_data = load_and_validate_json(json_file)
-            video_metadata = video_data["metadata"]
-            segments = video_data["transcript"]["segments"]
+            video_metadata: dict[str, Any] = {
+                "video_name": video_data.get("video_name", ""),
+                "client_name": video_data.get("client_name", ""),
+                "meeting_id": video_data.get("meeting_id", ""),
+                "original_url": video_data.get("meeting_url", ""),
+            }
+            segments_raw: list[dict[str, Any]] = video_data.get("transcript", [])
+            segments = [{**seg, "id": i} if "id" not in seg else seg for i, seg in enumerate(segments_raw)]
 
             logger.info(f"   {len(segments)} segmentos carregados")
 
@@ -219,8 +225,14 @@ class IndexingEngine:
         chunks: list[dict[str, Any]] = []
 
         video_data = load_and_validate_json(json_file)
-        video_metadata = video_data["metadata"]
-        segments = video_data["transcript"]["segments"]
+        video_metadata: dict[str, Any] = {
+            "video_name": video_data.get("video_name", ""),
+            "client_name": video_data.get("client_name", ""),
+            "meeting_id": video_data.get("meeting_id", ""),
+            "original_url": video_data.get("meeting_url", ""),
+        }
+        segments_raw: list[dict[str, Any]] = video_data.get("transcript", [])
+        segments = [{**seg, "id": i} if "id" not in seg else seg for i, seg in enumerate(segments_raw)]
 
         self.video_file = json_file
         normalized_name = self.video_normalizer.normalize(video_metadata["video_name"])["slug"]

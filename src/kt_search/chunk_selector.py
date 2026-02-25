@@ -677,7 +677,8 @@ class ChunkSelector:
                 query_type_enum = getattr(QueryType, query_type.upper())
             else:
                 query_type_enum = QueryType.SEMANTIC  # Default fallback
-        except Exception:
+        except Exception as e:
+            logger.warning(f"QueryType inválido '{query_type}' — usando SEMANTIC como fallback: {e}")
             query_type_enum = QueryType.SEMANTIC
 
         # Use internal method
