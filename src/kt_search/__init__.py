@@ -57,8 +57,14 @@ from .query_enricher import (
 from .search_engine import (
     SearchEngine,
     SearchResponse,
+    formatar_resultado_teams,
+    interactive_mode,
+    main,
+    main_teams,
+    print_results,
     quick_search,
     search_kt_knowledge,
+    single_query_mode,
 )
 
 # Search Utils
@@ -95,8 +101,14 @@ __all__ = [
     "classify_query",
     "enrich_query",
     "extract_entities",
+    "formatar_resultado_teams",
     "get_query_type",
+    "interactive_mode",
+    "main",
+    "main_teams",
+    "print_results",
     "quick_search",
     "search_kt_knowledge",
     "select_chunks",
+    "single_query_mode",
 ]
