@@ -9,7 +9,7 @@ Duas categorias de pastas: **infraestrutura** (obrigatórias, validadas no pre-c
 Recebe requests, valida entrada via Pydantic, delega para services, retorna responses.
 
 - Endpoints com `APIRouter(prefix="/v1/...", tags=[...])`
-- Schemas Pydantic como request/response em `api/schemas/` ou `src/db/models.py`
+- Schemas Pydantic como request/response em `api/schemas/`
 - Raise `ApplicationError` para erros de domínio
 - NEVER capture Exception genérica — global handlers em `api/main.py` tratam
 - NEVER faz `logger.exception()` — exclusivo dos global handlers
@@ -48,12 +48,6 @@ Global Exception Handlers (somente `api/main.py`): `ApplicationError` → JSON c
 Qualquer outro banco SQLite do projeto também vai para `data/sqlite_db/`.
 
 NEVER manter entradas não usadas — `startup.py` cria as pastas em disco, entradas fantasma criam pastas desnecessárias.
-
-### db/ — Modelos e Repositórios
-
-- `models.py` — modelos SQLAlchemy e/ou schemas Pydantic (request/response)
-- `repositories.py` — métodos CRUD, recebem `Session` no `__init__`, retornam `None` se não encontrado
-- NEVER implementa lógica de negócio. NEVER faz logging de queries.
 
 ### helpers/ — Funções de Suporte Transversais
 
@@ -171,7 +165,7 @@ include=["documents", "metadatas", "distances"]  # IncludeEnum removido
 ## Fluxo de Camadas
 
 ```
-Request HTTP → src/api/routers/ → src/services/ → src/<domínio>/ + src/helpers/ + src/db/ + src/config/
+Request HTTP → src/api/routers/ → src/services/ → src/<domínio>/ + src/helpers/ + src/config/
 ```
 
 Camadas superiores importam das inferiores. **Nunca o contrário.**

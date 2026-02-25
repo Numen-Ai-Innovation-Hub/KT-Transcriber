@@ -32,7 +32,6 @@ python-fastapi-template/
 ├── src/                    # Código fonte (ver src/CLAUDE.md)
 │   ├── api/                # INFRA: FastAPI routers e endpoints
 │   ├── config/             # INFRA: active.py, providers.py, settings.py, startup.py
-│   ├── db/                 # INFRA: Modelos SQLAlchemy e repositórios
 │   ├── helpers/            # INFRA: Funções de suporte transversais
 │   ├── services/           # INFRA: Orquestração (singletons thread-safe)
 │   ├── tasks/              # INFRA: ARQ tasks assíncronas
@@ -47,7 +46,7 @@ python-fastapi-template/
 ## Pastas Obrigatórias (validadas no pre-commit)
 
 - **Raiz:** `data/`, `docs/`, `logs/`, `scripts/`, `src/`, `tests/`, `utils/`, `.env.example`, `.gitignore`, `.pre-commit-config.yaml`, `pyproject.toml`, `CLAUDE.md`
-- **src/:** `api/`, `config/`, `db/`, `helpers/`, `services/`, `tasks/`
+- **src/:** `api/`, `config/`, `helpers/`, `services/`, `tasks/`
 - **src/config/:** `settings.py`, `startup.py` (obrigatórios) — `providers.py` e `active.py` opcionais (apenas se o projeto tiver seleção de provider LLM em runtime via UI)
 - **Pastas de domínio** em `src/` são livres por projeto (ex: `data_pipeline/`, `analytics/`)
 
@@ -120,7 +119,7 @@ Forbidden: `except Exception: pass`, `HTTPException` fora de routers, `logger.ex
 
 ## CLAUDEs Especializados
 
-- [src/CLAUDE.md](src/CLAUDE.md) — Infraestrutura + domínios (api/, config/, db/, helpers/, services/, tasks/)
+- [src/CLAUDE.md](src/CLAUDE.md) — Infraestrutura + domínios (api/, config/, helpers/, services/, tasks/)
 - [scripts/CLAUDE.md](scripts/CLAUDE.md) — Scripts Python pontuais
 - [tests/CLAUDE.md](tests/CLAUDE.md) — Testes pytest
 - [utils/CLAUDE.md](utils/CLAUDE.md) — Utilitários portáveis
