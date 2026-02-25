@@ -22,19 +22,23 @@ Exemplo:
 
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 # Garantir que a raiz do projeto está no sys.path para imports de src/, utils/ e scripts/
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from scripts.run_full_pipeline import FullPipelineRunner  # type: ignore[attr-defined]
-from src.config.settings import TLDV_API_KEY
+from scripts.run_full_pipeline import _print_summary
+from src.config.settings import DIRECTORY_PATHS, TLDV_API_KEY
 from src.config.startup import initialize_application
 from src.kt_ingestion.json_consolidator import JSONConsolidator
 from src.kt_ingestion.smart_processor import SmartMeetingProcessor
 from src.kt_ingestion.tldv_client import MeetingData, MeetingStatus, TLDVClient
+from src.services.kt_indexing_service import get_kt_indexing_service
+from src.services.kt_ingestion_service import get_kt_ingestion_service
 from utils.exception_setup import ApplicationError
 from utils.logger_setup import LoggerManager
 
@@ -58,13 +62,18 @@ _NAME_MAX_LEN = 75
 # ════════════════════════════════════════════════════════════════════════════
 
 
-class SelectivePipelineRunner(FullPipelineRunner):
+class SelectivePipelineRunner:
     """Pipeline com seleção interativa de reuniões KT.
 
-    Herda toda a lógica de FullPipelineRunner e substitui apenas a Fase 1
-    (ingestion) por um fluxo interativo onde o usuário escolhe quais
-    reuniões deseja processar.
+    Substitui a Fase 1 (ingestion automática) por seleção interativa.
+    As Fases 2 (indexação) e 3 (validação) delegam para KTIndexingService.
     """
+
+    def __init__(self) -> None:
+        """Inicializa com referências aos services e diretório de transcrições."""
+        self._ingestion_svc = get_kt_ingestion_service()
+        self._indexing_svc = get_kt_indexing_service()
+        self._transcriptions_dir: Path = DIRECTORY_PATHS["transcriptions"]
 
     # ────────────────────────────────────────────────────────────────────────
     # EXIBIÇÃO E SELEÇÃO INTERATIVA
@@ -183,19 +192,20 @@ class SelectivePipelineRunner(FullPipelineRunner):
             print("  Resposta inválida. Digite 's' para confirmar ou 'n' para voltar.\n")
 
     # ────────────────────────────────────────────────────────────────────────
-    # FASE 1 — INGESTION SELETIVA (substitui a do pai)
+    # FASE 1 — INGESTION SELETIVA
     # ────────────────────────────────────────────────────────────────────────
 
-    def run_ingestion(self) -> bool:
+    def run_ingestion(self) -> dict[str, Any]:
         """Fase 1 (interativa): lista reuniões e baixa apenas as selecionadas.
 
         Diferente do pipeline completo, não há lógica incremental automática —
         o usuário controla explicitamente o que será baixado.
-        Reuniões não concluídas (status != COMPLETED) são puladas com aviso.
 
         Returns:
-            True se ao menos uma reunião foi baixada com sucesso ou selecionada.
-            False se erro crítico (ex: API key ausente).
+            Dicionário com estatísticas da execução (meetings_found, meetings_downloaded, etc.).
+
+        Raises:
+            ApplicationError: Se TLDV_API_KEY não estiver configurada.
         """
         logger.info("═" * 120)
         logger.info("FASE 1 — INGESTION SELETIVA: Seleção interativa de reuniões TL:DV")
@@ -208,51 +218,136 @@ class SelectivePipelineRunner(FullPipelineRunner):
                 error_code="SERVICE_UNAVAILABLE",
             )
 
+        stats: dict[str, Any] = {
+            "meetings_found": 0,
+            "meetings_already_downloaded": 0,
+            "meetings_downloaded": 0,
+            "meetings_skipped_incomplete": 0,
+            "meetings_failed": 0,
+            "errors": [],
+        }
+
         client = TLDVClient(api_key=TLDV_API_KEY)
-        consolidator = JSONConsolidator(output_dir=self.transcriptions_dir)
+        consolidator = JSONConsolidator(output_dir=self._transcriptions_dir)
         processor = SmartMeetingProcessor(tldv_client=client, consolidator=consolidator)
 
         print()
         print("Buscando reuniões disponíveis no TL:DV...")
         all_meetings = client.list_meetings()
-        self.stats["meetings_found"] = len(all_meetings)
+        stats["meetings_found"] = len(all_meetings)
 
         if not all_meetings:
             print("Nenhuma reunião encontrada na conta TL:DV.")
-            return False
+            processor.shutdown_background_threads()
+            return stats
 
         print(f"Encontradas {len(all_meetings)} reunião(ões).")
 
-        existing_ids = self._get_existing_meeting_ids()
-        self.stats["meetings_already_downloaded"] = sum(1 for m in all_meetings if m.id in existing_ids)
+        existing_ids = self._ingestion_svc._get_existing_meeting_ids()  # type: ignore[attr-defined]
+        stats["meetings_already_downloaded"] = len(existing_ids)
 
-        # Seleção interativa — retorna somente as escolhidas e confirmadas
         selected_meetings = self._interactive_select(all_meetings, existing_ids)
-
         logger.info(f"Iniciando download de {len(selected_meetings)} reunião(ões) selecionada(s)")
 
         for i, meeting in enumerate(selected_meetings):
             logger.info(f"Processando {i + 1}/{len(selected_meetings)}: {meeting.name}")
             try:
-                self._process_single_meeting(meeting, processor, consolidator)
+                self._ingestion_svc._process_single_meeting(  # type: ignore[attr-defined]
+                    meeting, processor, consolidator, stats
+                )
             except ApplicationError as e:
                 logger.error(f"Erro ao processar reunião '{meeting.name}': {e.message}")
-                self.stats["meetings_failed"] += 1
-                self.stats["errors"].append(f"Ingestion — {meeting.name}: {e.message}")
+                stats["meetings_failed"] += 1
+                stats["errors"].append(f"Ingestion — {meeting.name}: {e.message}")
             except Exception as e:
                 logger.error(f"Erro inesperado ao processar reunião '{meeting.name}': {e}")
-                self.stats["meetings_failed"] += 1
-                self.stats["errors"].append(f"Ingestion — {meeting.name}: {e!s}")
+                stats["meetings_failed"] += 1
+                stats["errors"].append(f"Ingestion — {meeting.name}: {e!s}")
 
         logger.info(
             f"Fase 1 concluída — "
-            f"baixadas: {self.stats['meetings_downloaded']}, "
-            f"incompletas: {self.stats['meetings_skipped_incomplete']}, "
-            f"falhas: {self.stats['meetings_failed']}"
+            f"baixadas: {stats['meetings_downloaded']}, "
+            f"incompletas: {stats['meetings_skipped_incomplete']}, "
+            f"falhas: {stats['meetings_failed']}"
         )
-
         processor.shutdown_background_threads()
-        return True
+        return stats
+
+    # ────────────────────────────────────────────────────────────────────────
+    # ORQUESTRAÇÃO COMPLETA
+    # ────────────────────────────────────────────────────────────────────────
+
+    def run_full_pipeline(self, force_clean: bool = False, skip_indexing: bool = False) -> bool:
+        """Orquestra as 3 fases do pipeline seletivo.
+
+        Args:
+            force_clean: Se True, apaga todos os dados antes de iniciar.
+            skip_indexing: Se True, pula a Fase 2 (indexação no ChromaDB).
+
+        Returns:
+            True se todas as fases executadas concluíram com sucesso.
+        """
+        start_time = datetime.now()
+        success = True
+        ingestion_stats: dict[str, Any] = {}
+        indexing_stats: dict[str, Any] = {}
+        validation_info: dict[str, Any] = {}
+
+        logger.info("═" * 120)
+        logger.info("KT TRANSCRIBER — PIPELINE SELETIVO")
+        logger.info(f"Início: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        if force_clean:
+            logger.warning("Modo: FORCE CLEAN — todos os dados serão apagados antes da seleção")
+        logger.info("═" * 120)
+
+        if force_clean:
+            self._ingestion_svc.force_clean()
+            self._indexing_svc.force_clean()
+
+        # ── Fase 1 — Ingestion interativa ────────────────────────────────────
+        try:
+            ingestion_stats = self.run_ingestion()
+        except ApplicationError as e:
+            logger.error(f"Fase 1 abortada: {e.message}")
+            success = False
+        except Exception as e:
+            logger.error(f"Erro inesperado na Fase 1: {e}")
+            success = False
+
+        # ── Fase 2 — Indexação ───────────────────────────────────────────────
+        if not skip_indexing:
+            logger.info("═" * 120)
+            logger.info("FASE 2 — INDEXAÇÃO: Processando JSONs para ChromaDB")
+            logger.info("═" * 120)
+            try:
+                indexing_stats = self._indexing_svc.run_indexing()
+            except ApplicationError as e:
+                logger.error(f"Fase 2 abortada: {e.message}")
+                success = False
+            except Exception as e:
+                logger.error(f"Erro inesperado na Fase 2: {e}")
+                success = False
+        else:
+            logger.info("Fase 2 (Indexação) pulada via --skip-indexing")
+
+        # ── Fase 3 — Validação ───────────────────────────────────────────────
+        logger.info("═" * 120)
+        logger.info("FASE 3 — VALIDAÇÃO: Verificando estado do ChromaDB")
+        logger.info("═" * 120)
+        try:
+            validation_info = self._indexing_svc.get_status()
+            if not validation_info.get("total_documents"):
+                logger.warning("ChromaDB existe mas não contém documentos")
+                success = False
+        except ApplicationError as e:
+            logger.error(f"Fase 3 abortada: {e.message}")
+            success = False
+        except Exception as e:
+            logger.error(f"Erro inesperado na Fase 3: {e}")
+            success = False
+
+        _print_summary(ingestion_stats, indexing_stats, validation_info, start_time, success)
+        return success
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -296,7 +391,6 @@ def main() -> None:
     try:
         success = runner.run_full_pipeline(
             force_clean=args.force_clean,
-            skip_ingestion=False,
             skip_indexing=args.skip_indexing,
         )
     except KeyboardInterrupt:

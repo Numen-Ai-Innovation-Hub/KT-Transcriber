@@ -47,14 +47,22 @@ class KTIndexingService:
     # ────────────────────────────────────────────────────────────────────────
 
     def force_clean(self) -> None:
-        """Remove o diretório vector_db e o recria vazio."""
+        """Remove vector_db/ e chunks/ e os recria vazios."""
         import shutil
+
+        chunks_dir = self._transcriptions_dir / "chunks"
 
         logger.warning(f"Iniciando limpeza de vector_db/ em {self._vector_db_dir}")
         if self._vector_db_dir.exists():
             shutil.rmtree(self._vector_db_dir)
         self._vector_db_dir.mkdir(parents=True, exist_ok=True)
-        logger.warning("Limpeza concluída — vector_db/ recriado vazio")
+
+        logger.warning(f"Iniciando limpeza de chunks/ em {chunks_dir}")
+        if chunks_dir.exists():
+            shutil.rmtree(chunks_dir)
+        chunks_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.warning("Limpeza concluída — vector_db/ e chunks/ recriados vazios")
 
     def run_indexing(self) -> dict[str, Any]:
         """Indexa JSONs novos no ChromaDB de forma incremental.

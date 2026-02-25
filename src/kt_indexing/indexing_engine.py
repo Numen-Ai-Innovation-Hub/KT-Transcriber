@@ -177,13 +177,17 @@ class IndexingEngine:
         start_time = time.time()
         try:
             video_data = load_and_validate_json(json_file)
+            meta = video_data.get("metadata", {})
             video_metadata: dict[str, Any] = {
-                "video_name": video_data.get("video_name", ""),
-                "client_name": video_data.get("client_name", ""),
-                "meeting_id": video_data.get("meeting_id", ""),
-                "original_url": video_data.get("meeting_url", ""),
+                "video_name": meta.get("video_name", ""),
+                "client_name": meta.get("client_name", ""),
+                "meeting_id": meta.get("meeting_id", ""),
+                "original_url": meta.get("meeting_url", meta.get("original_url", "")),
             }
-            segments_raw: list[dict[str, Any]] = video_data.get("transcript", [])
+            transcript_section = video_data.get("transcript", {})
+            segments_raw: list[dict[str, Any]] = (
+                transcript_section.get("segments", []) if isinstance(transcript_section, dict) else transcript_section
+            )
             segments = [{**seg, "id": i} if "id" not in seg else seg for i, seg in enumerate(segments_raw)]
 
             logger.info(f"   {len(segments)} segmentos carregados")
@@ -225,13 +229,17 @@ class IndexingEngine:
         chunks: list[dict[str, Any]] = []
 
         video_data = load_and_validate_json(json_file)
+        meta = video_data.get("metadata", {})
         video_metadata: dict[str, Any] = {
-            "video_name": video_data.get("video_name", ""),
-            "client_name": video_data.get("client_name", ""),
-            "meeting_id": video_data.get("meeting_id", ""),
-            "original_url": video_data.get("meeting_url", ""),
+            "video_name": meta.get("video_name", ""),
+            "client_name": meta.get("client_name", ""),
+            "meeting_id": meta.get("meeting_id", ""),
+            "original_url": meta.get("meeting_url", meta.get("original_url", "")),
         }
-        segments_raw: list[dict[str, Any]] = video_data.get("transcript", [])
+        transcript_section = video_data.get("transcript", {})
+        segments_raw: list[dict[str, Any]] = (
+            transcript_section.get("segments", []) if isinstance(transcript_section, dict) else transcript_section
+        )
         segments = [{**seg, "id": i} if "id" not in seg else seg for i, seg in enumerate(segments_raw)]
 
         self.video_file = json_file

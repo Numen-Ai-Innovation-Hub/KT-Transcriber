@@ -299,12 +299,21 @@ class TestKTIndexingUtils:
 
         assert normalize_client_name("ABC DEF") == "ABC_DEF"
 
-    def test_extract_client_name_smart_heuristica(self) -> None:
-        """Primeira palavra não-stopword é extraída como nome do cliente."""
+    def test_extract_client_name_smart_bracket_dexco(self) -> None:
+        """Notação [BRACKET] detecta DEXCO em variações de case."""
         from src.kt_indexing.kt_indexing_utils import extract_client_name_smart
 
-        result = extract_client_name_smart("KT Vissimo MM")
-        assert result == "VISSIMO"
+        assert extract_client_name_smart("[DEXCO] NEW_KT - SIMULADO EWM") == "DEXCO"
+        assert extract_client_name_smart("[dexco] KT SD") == "DEXCO"
+        assert extract_client_name_smart("[Dexco] - KT FI") == "DEXCO"
+
+    def test_extract_client_name_smart_fallback_dexco(self) -> None:
+        """Vídeo sem [BRACKET] retorna DEXCO como fallback padrão do projeto."""
+        from src.kt_indexing.kt_indexing_utils import extract_client_name_smart
+
+        assert extract_client_name_smart("KT Sustentação - Ajuste no PO de frete") == "DEXCO"
+        assert extract_client_name_smart("KT - Estorno em massa") == "DEXCO"
+        assert extract_client_name_smart("Reforma Tributária KT") == "DEXCO"
 
     def test_extract_sap_modules_from_title_encontra_multiplos(self) -> None:
         """Múltiplos módulos SAP no título são detectados."""
@@ -783,16 +792,16 @@ class TestIndexingEngineMetadata:
         assert result["meeting_phase"] == METADATA_DEFAULTS["meeting_phase"]
 
     def test_create_simple_fallback_metadata_com_cliente_gera_tags(self, tmp_path: Path) -> None:
-        """Com cliente detectável no nome do vídeo, searchable_tags contém o cliente."""
+        """Com [BRACKET] no nome do vídeo, searchable_tags contém o cliente correto."""
         engine = self._make_engine(tmp_path)
 
         result = engine._create_simple_fallback_metadata(  # type: ignore[attr-defined]
             chunk_text="Texto",
-            video_metadata={"video_name": "KT Vissimo MM"},
+            video_metadata={"video_name": "[DEXCO] KT - SIMULADO EWM"},
             segment={},
         )
 
-        assert "VISSIMO" in result["searchable_tags"]
+        assert "DEXCO" in result["searchable_tags"]
 
     def test_find_input_files_encontra_apenas_consolidados(self, tmp_path: Path) -> None:
         """_find_input_files retorna apenas arquivos com sufixo _consolidado.json."""

@@ -88,16 +88,17 @@ class EnhancedVideoNormalizer:
         # Remover timestamps no formato YYYYMMDD_HHMMSS
         cleaned = re.sub(r"\d{8}_\d{6}", "", cleaned)
 
-        # Remover espaços extras
+        # Remover sufixo padrão TL:DV "Gravação de Reunião" (com variantes numéricas)
+        cleaned = re.sub(r"-?\s*Grava[cç][aã]o de Reuni[aã]o\s*\d*", "", cleaned, flags=re.IGNORECASE)
+
+        # Remover espaços extras e hífens soltos no final
+        cleaned = re.sub(r"[-\s]+$", "", cleaned)
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
         # Normalizar unicode
         normalized_name = self._normalize_unicode(cleaned)
 
-        # Gerar slug
-        slug = self._to_slug(normalized_name)
-
-        # Extrair módulos SAP (regex primeiro, depois LLM se disponível)
+        # Extrair módulos SAP ANTES de gerar o slug (necessário para slug semântico)
         modules = self._extract_modules_regex(video_name)
 
         # Extração LLM se módulos não detectados via regex e LLM disponível
@@ -107,6 +108,9 @@ class EnhancedVideoNormalizer:
             if llm_result:
                 modules = llm_result.get("modules", modules)
                 description = llm_result.get("description", "")
+
+        # Gerar slug semântico com cliente + módulo/keyword + data
+        slug = self._build_semantic_slug(video_name, modules)
 
         return {
             "normalized_name": normalized_name,
@@ -159,7 +163,77 @@ class EnhancedVideoNormalizer:
         slug = re.sub(r"\s+", "_", slug)
         slug = re.sub(r"_+", "_", slug).strip("_")
 
-        return slug[:100] if slug else "video_kt"
+        return slug[:50] if slug else "video_kt"
+
+    def _build_semantic_slug(self, video_name: str, modules: list[str]) -> str:
+        """Constrói slug semântico no formato {cliente}_{modulo}_{data}.
+
+        Args:
+            video_name: Nome original do vídeo (para extrair cliente, keyword e data).
+            modules: Módulos SAP detectados via regex/LLM.
+
+        Returns:
+            Slug no formato {cliente}_{modulo_ou_keyword}_{data}, máx 50 chars.
+        """
+        client_part = self._extract_slug_client(video_name)
+        module_part = modules[0].lower() if modules else self._extract_slug_keyword(video_name)
+        date_match = re.search(r"(\d{8})(?:_\d{6})?", video_name)
+        date_part = date_match.group(1) if date_match else ""
+        parts = [p for p in [client_part, module_part, date_part] if p]
+        return "_".join(parts)[:50] if parts else "video_kt"
+
+    def _extract_slug_client(self, video_name: str) -> str:
+        """Extrai parte do cliente para o slug a partir de [BRACKET] ou fallback.
+
+        Args:
+            video_name: Nome original do vídeo.
+
+        Returns:
+            Nome do cliente em lowercase sem acentos (ex: "dexco", "vissimo").
+        """
+        bracket = re.search(r"\[([^\]]+)\]", video_name)
+        if bracket:
+            raw = bracket.group(1).strip()
+            no_accent = unicodedata.normalize("NFD", raw)
+            no_accent = "".join(c for c in no_accent if unicodedata.category(c) != "Mn")
+            client = re.sub(r"[^a-z0-9]", "", no_accent.lower())
+            return client if client else "dexco"
+        return "dexco"
+
+    def _extract_slug_keyword(self, video_name: str) -> str:
+        """Extrai keyword do tema principal quando não há módulo SAP detectado.
+
+        Args:
+            video_name: Nome original do vídeo.
+
+        Returns:
+            Abreviação do tema (ex: "icms", "frete", "sus"), ou string vazia.
+        """
+        video_upper = video_name.upper()
+        keywords = [
+            ("ICMS", "icms"),
+            ("FRETE", "frete"),
+            ("ESTORNO", "estorno"),
+            ("SUSTENTA", "sus"),
+            ("ESTRATEG", "est"),
+            ("CORREC", "cor"),
+            ("SIMULADO", "sim"),
+            ("INTEGRA", "int"),
+            ("KICKOFF", "kickoff"),
+            ("COMPLEMENTO", "comp"),
+            ("REFORMA", "reform"),
+            ("IFLOW", "iflow"),
+            ("INVENTARIO", "inv"),
+            ("WORKFLOW", "wf"),
+            ("CUSTO", "custo"),
+            ("FATURAMENTO", "fat"),
+            ("RECEBIMENTO", "rec"),
+            ("CONTABIL", "cont"),
+        ]
+        for key, abbrev in keywords:
+            if key in video_upper:
+                return abbrev
+        return ""
 
     def _extract_modules_regex(self, video_name: str) -> list[str]:
         """Extrai módulos SAP do nome do vídeo via regex.

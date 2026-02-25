@@ -63,32 +63,37 @@ def normalize_client_name(client_name: str) -> str:
 def extract_client_name_smart(video_name: str, client_patterns: dict[str, list[str]] | None = None) -> str:
     """Extrai nome do cliente do nome do vídeo com detecção inteligente.
 
+    Prioridade:
+    1. Notação [BRACKET] — ex: "[DEXCO]", "[VISSIMO]"
+    2. Padrões mapeados explicitamente via client_patterns
+    3. Fallback: "DEXCO" (cliente padrão do projeto)
+
     Args:
         video_name: Nome do vídeo/reunião.
         client_patterns: Mapeamento de cliente para padrões de detecção.
 
     Returns:
-        Nome do cliente detectado ou 'CLIENTE_DESCONHECIDO'.
+        Nome do cliente normalizado em uppercase.
     """
     if not video_name:
         return "CLIENTE_DESCONHECIDO"
 
     video_upper = video_name.upper()
 
+    # Prioridade 1: notação [BRACKET] — ex: "[DEXCO]", "[Víssimo]"
+    bracket = re.search(r"\[([^\]]+)\]", video_name)
+    if bracket:
+        return normalize_client_name(bracket.group(1).strip())
+
+    # Prioridade 2: padrões mapeados explicitamente
     if client_patterns:
         for client_name, patterns in client_patterns.items():
             for pattern in patterns:
                 if pattern.upper() in video_upper:
                     return normalize_client_name(client_name)
 
-    # Heurística: pegar primeira palavra significativa (>3 chars, não stopword)
-    stopwords = {"KT", "REUNIAO", "REUNIÃO", "MEETING", "CALL", "VIDEO", "VÍDEO"}
-    words = re.findall(r"[A-Za-zÀ-ÿ]{3,}", video_name)
-    for word in words:
-        if word.upper() not in stopwords:
-            return normalize_client_name(word)
-
-    return "CLIENTE_DESCONHECIDO"
+    # Fallback: cliente padrão do projeto
+    return "DEXCO"
 
 
 def extract_client_name(video_name: str) -> str:
@@ -223,23 +228,24 @@ def calculate_estimated_processing_time(segment_count: int, rate_limit_delay: fl
 def extract_enriched_tldv_fields(meeting_data: dict[str, Any]) -> dict[str, Any]:
     """Extrai campos enriquecidos dos dados TL:DV para metadados.
 
-    Espera formato flat produzido por JSONConsolidator:
-    campos video_name, meeting_url, happened_at, duration, organizer, highlights na raiz.
+    Suporta formato aninhado ({"metadata": {...}, "transcript": {...}, "highlights": [...]})
+    e formato flat (campos na raiz) — fallback automático para retrocompatibilidade.
 
     Args:
-        meeting_data: JSON consolidado da reunião (formato flat).
+        meeting_data: JSON consolidado da reunião.
 
     Returns:
         Dicionário com campos extraídos.
     """
+    meta = meeting_data.get("metadata", meeting_data)
     highlights = meeting_data.get("highlights", [])
 
     return {
-        "original_url": meeting_data.get("meeting_url", ""),
-        "meeting_date": _extract_date_from_iso(meeting_data.get("happened_at", "")),
-        "duration_seconds": meeting_data.get("duration", 0),
+        "original_url": meta.get("meeting_url", meta.get("original_url", "")),
+        "meeting_date": _extract_date_from_iso(meta.get("happened_at", "")),
+        "duration_seconds": meta.get("duration", 0),
         "highlights_summary": _build_highlights_summary(highlights),
-        "organizer": _extract_organizer_name(meeting_data.get("organizer")),
+        "organizer": _extract_organizer_name(meta.get("organizer")),
     }
 
 
