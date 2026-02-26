@@ -1,0 +1,19 @@
+fix(kt_indexing): slug de reuniao baseado no nome completo + meeting_id para unicidade garantida
+
+- video_normalizer.py: _build_semantic_slug() reescrito para usar o nome
+  completo do video (sem sufixo TL:DV, timestamp e colchetes) como base,
+  truncado em 40 chars, com os primeiros 8 chars do meeting_id como sufixo
+  de unicidade absoluta. Formato: {nome_40chars}_{meeting_id_8chars}
+  Exemplo: dexco_reforma_tributaria_kt_mm_abap_mm_699f383b
+
+- video_normalizer.py: normalize() passa a aceitar meeting_id como parametro
+  opcional; emite warning se ausente pois unicidade nao pode ser garantida.
+  Extracao de modulos SAP via regex/LLM mantida — retornada no resultado
+  mas nao compoem mais o slug.
+
+- indexing_engine.py: ambas as chamadas a normalize() passam
+  meeting_id=video_metadata.get("meeting_id", "") disponivel no JSON.
+
+- run_select_pipeline.py: _parse_selection() suporta intervalo numerico
+  (ex: 1-20), combinacao mista (ex: 1-5, 9, 12-15) e mantem comportamento
+  existente para numero unico, lista CSV e "all".
