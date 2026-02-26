@@ -139,9 +139,10 @@ def print_results(response: SearchResponse, show_details: bool = False) -> None:
     """
     if not response.success:
         logger.info("═" * 120)
-        logger.info("CONSULTA SEM RESULTADOS")
+        logger.info("❌ CONSULTA SEM RESULTADOS")
         logger.info("─" * 40)
-        logger.info(f"  {response.error_message}")
+        logger.info(f"   {response.error_message}")
+        logger.info("MÉTRICAS:")
         logger.info("─" * 40)
         logger.info(f"  Tempo total: {response.processing_time:.2f}s")
         logger.info("═" * 120)
@@ -150,22 +151,22 @@ def print_results(response: SearchResponse, show_details: bool = False) -> None:
     logger.info("═" * 120)
 
     # Resposta inteligente
-    logger.info("RESPOSTA INTELIGENTE:")
+    logger.info("💡 RESPOSTA INTELIGENTE:")
     logger.info("─" * 40)
 
     answer_text = response.intelligent_response.get("answer", "").strip()
     if answer_text:
         for line in answer_text.split("\n"):
             if line.strip():
-                logger.info(f"  {line.strip()}")
+                logger.info(f"   {line.strip()}")
     else:
-        logger.info("  Não foi possível gerar resposta.")
+        logger.info("   Não foi possível gerar resposta.")
 
     if response.intelligent_response.get("details"):
-        logger.info(f"  Detalhes: {response.intelligent_response['details']}")
+        logger.info(f"📋 Detalhes: {response.intelligent_response['details']}")
 
     # Contextos encontrados
-    logger.info("CONTEXTOS ENCONTRADOS:")
+    logger.info("📚 CONTEXTOS ENCONTRADOS:")
     logger.info("─" * 40)
 
     if response.contexts:
@@ -175,12 +176,14 @@ def print_results(response: SearchResponse, show_details: bool = False) -> None:
 
             if video_link:
                 client_info = (
-                    f"  Cliente: {context.get('client', 'N/A')}"
+                    f"   📁 Cliente: {context.get('client', 'N/A')}"
                     f" | Reunião: {context.get('video_name', 'N/A')}"
-                    f"\n     Link: {video_link}"
+                    f"\n   🔗 Link: {video_link}"
                 )
             else:
-                client_info = f"  Cliente: {context.get('client', 'N/A')} | Reunião: {context.get('video_name', 'N/A')}"
+                client_info = (
+                    f"   📁 Cliente: {context.get('client', 'N/A')} | Reunião: {context.get('video_name', 'N/A')}"
+                )
 
             if response.query_type == "METADATA":
                 logger.info(f"{context['rank']}. {client_info.strip()}")
@@ -192,31 +195,32 @@ def print_results(response: SearchResponse, show_details: bool = False) -> None:
 
                 logger.info(client_info)
 
-                if context.get("timestamp") and context["timestamp"] not in ("Unknown", ""):
-                    logger.info(f"     Tempo: {context['timestamp']}")
+                timestamp = context.get("timestamp", "")
+                if timestamp and timestamp not in ("Unknown", "", "-"):
+                    logger.info(f"   🕐 Tempo: {timestamp}")
 
                 if show_details:
                     logger.debug(
-                        f"     Qualidade: {context.get('quality_score', 0.0):.2f}"
+                        f"   Qualidade: {context.get('quality_score', 0.0):.2f}"
                         f" | Relevância: {context.get('similarity_score', 0.0):.2f}"
                     )
     else:
-        logger.info("  Nenhum contexto específico encontrado.")
+        logger.info("   Nenhum contexto específico encontrado.")
 
     # Métricas técnicas (apenas com show_details=True)
     if show_details:
-        logger.info("MÉTRICAS DETALHADAS:")
+        logger.info("📊 MÉTRICAS DETALHADAS:")
         logger.info("─" * 40)
         confidence = response.intelligent_response.get("confidence", 0.0)
-        confidence_icon = "OK" if confidence > 0.8 else "AVG" if confidence > 0.5 else "LOW"
+        confidence_icon = "✅" if confidence > 0.8 else "⚠️" if confidence > 0.5 else "❓"
         logger.info(f"  Tempo total:                {response.processing_time:.4f}s")
-        logger.info(f"  Tempo insights:             {response.intelligent_response.get('processing_time', 0.0):.4f}s")
-        logger.info(f"  Tipo de consulta:           {response.query_type}")
-        logger.info(f"  Estratégia de seleção:      {response.summary_stats.get('selection_strategy', 'N/A')}")
+        logger.info(f"  Processamento insights:     {response.intelligent_response.get('processing_time', 0.0):.4f}s")
+        logger.info(f"  Tipo consulta:              {response.query_type}")
+        logger.info(f"  Estratégia seleção:         {response.summary_stats.get('selection_strategy', 'N/A')}")
         logger.info(f"  Chunks encontrados:         {response.summary_stats.get('total_chunks_found', 0)}")
         logger.info(f"  Chunks selecionados:        {response.summary_stats.get('chunks_selected', 0)}")
         logger.info(f"  Clientes envolvidos:        {len(response.summary_stats.get('clients_involved', []))}")
         logger.info(f"  Limiar qualidade atingido:  {response.summary_stats.get('quality_threshold_met', 'N/A')}")
-        logger.info(f"  [{confidence_icon}] Confiança:            {confidence:.1%}")
+        logger.info(f"  {confidence_icon} Confiança:              {confidence:.1%}")
 
     logger.info("═" * 120)

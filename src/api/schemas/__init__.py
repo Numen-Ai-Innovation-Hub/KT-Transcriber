@@ -7,6 +7,10 @@ from .kt_schemas import (
     KTIndexingStatusResponse,
     KTSearchRequest,
     KTSearchResponse,
+    PipelineStartRequest,
+    PipelineStartResponse,
+    StageJobResponse,
+    StageStatusResponse,
 )
 
 __all__ = [
@@ -15,4 +19,8 @@ __all__ = [
     "KTIndexingStatusResponse",
     "KTSearchRequest",
     "KTSearchResponse",
+    "PipelineStartRequest",
+    "PipelineStartResponse",
+    "StageJobResponse",
+    "StageStatusResponse",
 ]
