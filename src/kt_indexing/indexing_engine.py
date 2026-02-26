@@ -192,7 +192,10 @@ class IndexingEngine:
 
             logger.info(f"   {len(segments)} segmentos carregados")
 
-            normalized_name = self.video_normalizer.normalize(video_metadata["video_name"])["slug"]
+            normalized_name = self.video_normalizer.normalize(
+                video_metadata["video_name"],
+                meeting_id=video_metadata.get("meeting_id", ""),
+            )["slug"]
             logger.info(f"   Nome normalizado: {normalized_name}")
 
             video_stats.update(
@@ -243,7 +246,10 @@ class IndexingEngine:
         segments = [{**seg, "id": i} if "id" not in seg else seg for i, seg in enumerate(segments_raw)]
 
         self.video_file = json_file
-        normalized_name = self.video_normalizer.normalize(video_metadata["video_name"])["slug"]
+        normalized_name = self.video_normalizer.normalize(
+            video_metadata["video_name"],
+            meeting_id=video_metadata.get("meeting_id", ""),
+        )["slug"]
 
         for segment in segments:
             segment_text = segment.get("text", "")

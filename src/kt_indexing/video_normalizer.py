@@ -59,16 +59,17 @@ class EnhancedVideoNormalizer:
         else:
             logger.info("EnhancedVideoNormalizer inicializado sem LLM (modo regex only)")
 
-    def normalize(self, video_name: str) -> dict[str, Any]:
+    def normalize(self, video_name: str, meeting_id: str = "") -> dict[str, Any]:
         """Normaliza nome de vídeo com extração de metadados.
 
         Args:
             video_name: Nome original do vídeo/reunião.
+            meeting_id: ID único da reunião no TL:DV (garante unicidade do slug).
 
         Returns:
             Dict com:
                 - normalized_name: Nome normalizado
-                - slug: Slug para uso como ID
+                - slug: Slug para uso como ID e nome de pasta
                 - modules: Módulos SAP detectados
                 - description: Descrição resumida
                 - original_name: Nome original
@@ -98,7 +99,7 @@ class EnhancedVideoNormalizer:
         # Normalizar unicode
         normalized_name = self._normalize_unicode(cleaned)
 
-        # Extrair módulos SAP ANTES de gerar o slug (necessário para slug semântico)
+        # Extrair módulos SAP (retornados no resultado, não usados no slug)
         modules = self._extract_modules_regex(video_name)
 
         # Extração LLM se módulos não detectados via regex e LLM disponível
@@ -109,8 +110,8 @@ class EnhancedVideoNormalizer:
                 modules = llm_result.get("modules", modules)
                 description = llm_result.get("description", "")
 
-        # Gerar slug semântico com cliente + módulo/keyword + data
-        slug = self._build_semantic_slug(video_name, modules)
+        # Gerar slug a partir do nome completo + meeting_id como sufixo de unicidade
+        slug = self._build_semantic_slug(video_name, meeting_id)
 
         return {
             "normalized_name": normalized_name,
@@ -165,22 +166,35 @@ class EnhancedVideoNormalizer:
 
         return slug[:50] if slug else "video_kt"
 
-    def _build_semantic_slug(self, video_name: str, modules: list[str]) -> str:
-        """Constrói slug semântico no formato {cliente}_{modulo}_{data}.
+    def _build_semantic_slug(self, video_name: str, meeting_id: str = "") -> str:
+        """Constrói slug único a partir do nome completo do vídeo + prefixo do meeting_id.
+
+        O nome completo do vídeo (sem sufixo TL:DV, timestamp e colchetes) é usado
+        como base legível. Os primeiros 8 chars do meeting_id garantem unicidade
+        absoluta, inclusive entre dois vídeos com nomes praticamente idênticos.
+
+        Formato: {video_name_sanitizado_40chars}_{meeting_id_8chars}
 
         Args:
-            video_name: Nome original do vídeo (para extrair cliente, keyword e data).
-            modules: Módulos SAP detectados via regex/LLM.
+            video_name: Nome original do vídeo/reunião.
+            meeting_id: ID único da reunião no TL:DV (ex: "699f383b5027ff0012021c95").
 
         Returns:
-            Slug no formato {cliente}_{modulo_ou_keyword}_{data}, máx 50 chars.
+            Slug no formato {nome_40chars}_{id8}, máx 49 chars.
         """
-        client_part = self._extract_slug_client(video_name)
-        module_part = modules[0].lower() if modules else self._extract_slug_keyword(video_name)
-        date_match = re.search(r"(\d{8})(?:_\d{6})?", video_name)
-        date_part = date_match.group(1) if date_match else ""
-        parts = [p for p in [client_part, module_part, date_part] if p]
-        return "_".join(parts)[:50] if parts else "video_kt"
+        if not meeting_id:
+            logger.warning(f"meeting_id não fornecido para slug de '{video_name}' — unicidade do slug não garantida")
+
+        # Remover sufixo TL:DV e timestamp para isolar o título da reunião
+        base = re.sub(r"-?\s*Grava[cç][aã]o de Reuni[aã]o\s*\d*", "", video_name, flags=re.IGNORECASE)
+        base = re.sub(r"-?\d{8}_\d{6}", "", base)
+        # Remover colchetes e parênteses (delimitadores de cliente/contexto)
+        base = re.sub(r"[\[\]\(\)]", " ", base)
+
+        name_part = self._to_slug(base)[:40].strip("_")
+        id_part = meeting_id[:8] if meeting_id else ""
+        parts = [p for p in [name_part, id_part] if p]
+        return "_".join(parts) if parts else "video_kt"
 
     def _extract_slug_client(self, video_name: str) -> str:
         """Extrai parte do cliente para o slug a partir de [BRACKET] ou fallback.
