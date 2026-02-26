@@ -765,7 +765,7 @@ class ChromaDBStore:
                 logger.debug(f"Campo dict ignorado (ChromaDB não suporta): {key}")
                 continue
             elif value is None:
-                clean_metadata[key] = None
+                continue
             elif isinstance(value, str | int | float | bool):
                 clean_metadata[key] = value
             else:
