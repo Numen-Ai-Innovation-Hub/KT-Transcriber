@@ -133,6 +133,107 @@ class KTIngestionService:
         )
         return stats
 
+    def list_meetings_with_status(self) -> list[dict[str, Any]]:
+        """Lista reuniões disponíveis no TL:DV com flag de indexação.
+
+        Retorna cada reunião com already_indexed=True se o JSON já estiver em
+        data/transcriptions/ (indica que foi baixada — pode ou não estar no ChromaDB).
+
+        Returns:
+            Lista de dicts com id, name, status, duration, already_indexed.
+
+        Raises:
+            ApplicationError: Se TLDV_API_KEY não estiver configurada.
+        """
+        if not TLDV_API_KEY:
+            raise ApplicationError(
+                message="TLDV_API_KEY não configurada no .env",
+                status_code=503,
+                error_code="SERVICE_UNAVAILABLE",
+            )
+
+        client = TLDVClient(api_key=TLDV_API_KEY)
+        all_meetings = client.list_meetings()
+        existing_ids = self._get_existing_meeting_ids()
+
+        return [
+            {
+                "id": m.id,
+                "name": m.name,
+                "status": m.status.value,
+                "duration": m.duration,
+                "already_indexed": m.id in existing_ids,
+            }
+            for m in all_meetings
+        ]
+
+    def run_selective_ingestion(self, meeting_ids: list[str]) -> dict[str, Any]:
+        """Executa ingestion seletiva das reuniões informadas.
+
+        Baixa e processa apenas os meetings cujos IDs foram fornecidos,
+        independentemente de já estarem em disco (usuário escolheu explicitamente).
+
+        Args:
+            meeting_ids: Lista de IDs de reuniões a baixar.
+
+        Returns:
+            Dicionário com estatísticas da execução.
+
+        Raises:
+            ApplicationError: Se TLDV_API_KEY não estiver configurada.
+        """
+        if not TLDV_API_KEY:
+            raise ApplicationError(
+                message="TLDV_API_KEY não configurada no .env",
+                status_code=503,
+                error_code="SERVICE_UNAVAILABLE",
+            )
+
+        stats: dict[str, Any] = {
+            "meetings_found": len(meeting_ids),
+            "meetings_downloaded": 0,
+            "meetings_skipped_incomplete": 0,
+            "meetings_failed": 0,
+            "errors": [],
+        }
+
+        ids_set = set(meeting_ids)
+        client = TLDVClient(api_key=TLDV_API_KEY)
+        consolidator = JSONConsolidator(output_dir=self._transcriptions_dir)
+        processor = SmartMeetingProcessor(tldv_client=client, consolidator=consolidator)
+
+        all_meetings = client.list_meetings()
+        selected = [m for m in all_meetings if m.id in ids_set]
+
+        if not selected:
+            logger.warning(f"Nenhuma reunião encontrada para {len(meeting_ids)} ID(s) fornecidos")
+            processor.shutdown_background_threads()
+            return stats
+
+        logger.info(f"Reuniões selecionadas para download: {len(selected)}")
+
+        for i, meeting in enumerate(selected):
+            logger.info(f"Processando {i + 1}/{len(selected)}: {meeting.name}")
+            try:
+                self._process_single_meeting(meeting, processor, consolidator, stats)
+            except ApplicationError as e:
+                logger.error(f"Erro ao processar reunião '{meeting.name}': {e.message}")
+                stats["meetings_failed"] += 1
+                stats["errors"].append(f"Ingestion — {meeting.name}: {e.message}")
+            except Exception as e:
+                logger.error(f"Erro inesperado ao processar reunião '{meeting.name}': {e}")
+                stats["meetings_failed"] += 1
+                stats["errors"].append(f"Ingestion — {meeting.name}: {e!s}")
+
+        processor.shutdown_background_threads()
+        logger.info(
+            f"Ingestion seletiva concluída — "
+            f"baixadas: {stats['meetings_downloaded']}, "
+            f"incompletas: {stats['meetings_skipped_incomplete']}, "
+            f"falhas: {stats['meetings_failed']}"
+        )
+        return stats
+
     # ────────────────────────────────────────────────────────────────────────
     # PRIVADOS
     # ────────────────────────────────────────────────────────────────────────

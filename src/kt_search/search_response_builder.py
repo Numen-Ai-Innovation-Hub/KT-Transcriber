@@ -19,6 +19,19 @@ from .search_types import SearchResponse
 logger = LoggerManager.get_logger(__name__)
 
 
+def _build_timestamp(metadata: dict[str, Any]) -> str:
+    """Constrói timestamp formatado a partir dos campos start/end do metadata.
+
+    Retorna string vazia quando ambos os campos são ausentes ou vazios,
+    evitando o artefato '-' que o ChromaDB retorna nesses casos.
+    """
+    start = metadata.get("start_time_formatted", "") or ""
+    end = metadata.get("end_time_formatted", "") or ""
+    if not start and not end:
+        return ""
+    return f"{start or '00:00'}-{end or '00:00'}"
+
+
 class SearchResponseBuilder:
     """Constrói e formata objetos SearchResponse sem estado de instância."""
 
@@ -164,9 +177,7 @@ class SearchResponseBuilder:
                 "client": metadata.get("client_name", "Unknown"),
                 "video_name": metadata.get("video_name", "Unknown"),
                 "speaker": metadata.get("speaker", "Unknown"),
-                "timestamp": (
-                    f"{metadata.get('start_time_formatted', '00:00')}-{metadata.get('end_time_formatted', '00:00')}"
-                ),
+                "timestamp": _build_timestamp(metadata),
                 "quality_score": chunk.get("quality_score", 0.0),
                 "relevance_reason": f"Qualidade: {chunk.get('quality_score', 0.0):.2f}",
                 "original_url": metadata.get("original_url", ""),

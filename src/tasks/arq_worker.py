@@ -28,6 +28,7 @@ from arq.connections import RedisSettings
 from src.config.settings import REDIS_DB, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
 from src.tasks.kt_indexing_task import kt_indexing_task
 from src.tasks.kt_ingestion_task import kt_ingestion_task
+from src.tasks.kt_selective_pipeline_task import kt_selective_pipeline_task
 from src.tasks.kt_search_task import (
     kt_search_chromadb_task,
     kt_search_classify_task,
@@ -78,6 +79,7 @@ class WorkerSettings:
     functions: list[Callable[..., Any]] = [
         kt_ingestion_task,
         kt_indexing_task,
+        kt_selective_pipeline_task,
         kt_search_enrich_task,
         kt_search_classify_task,
         kt_search_chromadb_task,
@@ -96,6 +98,7 @@ class WorkerSettings:
     max_jobs = 6  # Busca RAG tem 6 estágios I/O bound; ingestion/indexação são as mais pesadas
     job_timeout = 7200  # 2 horas (ingestion de muitas reuniões pode ser lento)
     keep_result = 3600  # Mantém resultado por 1 hora no Redis
+    poll_delay = 0.5  # Intervalo de polling Redis (default ARQ = 0.5s — explícito para estabilidade)
 
     on_startup = startup
     on_shutdown = shutdown

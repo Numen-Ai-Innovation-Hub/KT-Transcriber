@@ -47,22 +47,34 @@ class KTIndexingService:
     # ────────────────────────────────────────────────────────────────────────
 
     def force_clean(self) -> None:
-        """Remove vector_db/ e chunks/ e os recria vazios."""
+        """Apaga todos os documentos do ChromaDB (via API) e recria chunks/ vazio.
+
+        Usa a API do ChromaDB em vez de shutil.rmtree para evitar PermissionError
+        no Windows quando outro processo (ex: FastAPI) mantém chroma.sqlite3 aberto.
+        """
         import shutil
 
+        from src.kt_indexing.chromadb_store import ChromaDBStore
+
+        # ── ChromaDB: deleta e recria a coleção via API (respeita o lock SQLite)
+        store = ChromaDBStore()
+        collection_name: str = store.config["collection_name"]
+        logger.warning(f"Limpando coleção ChromaDB via API: {collection_name}")
+        store.client.delete_collection(collection_name)
+        store.client.create_collection(
+            name=collection_name,
+            metadata={"description": "KT transcription chunks with semantic search"},
+        )
+        logger.warning("Coleção ChromaDB recriada vazia")
+
+        # ── Chunks: apaga e recria diretório (sem lock de SQLite)
         chunks_dir = self._transcriptions_dir / "chunks"
-
-        logger.warning(f"Iniciando limpeza de vector_db/ em {self._vector_db_dir}")
-        if self._vector_db_dir.exists():
-            shutil.rmtree(self._vector_db_dir)
-        self._vector_db_dir.mkdir(parents=True, exist_ok=True)
-
-        logger.warning(f"Iniciando limpeza de chunks/ em {chunks_dir}")
+        logger.warning(f"Limpando chunks/ em {chunks_dir}")
         if chunks_dir.exists():
             shutil.rmtree(chunks_dir)
         chunks_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.warning("Limpeza concluída — vector_db/ e chunks/ recriados vazios")
+        logger.warning("force_clean concluído — coleção ChromaDB vazia + chunks/ recriado")
 
     def run_indexing(self) -> dict[str, Any]:
         """Indexa JSONs novos no ChromaDB de forma incremental.

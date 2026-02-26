@@ -27,6 +27,7 @@ from starlette.middleware.cors import CORSMiddleware
 from src.api.routers import health
 from src.api.routers.kt_indexing_router import router as kt_indexing_router
 from src.api.routers.kt_ingestion_router import router as kt_ingestion_router
+from src.api.routers.kt_pipeline_router import router as kt_pipeline_router
 from src.api.routers.kt_search_router import router as kt_search_router
 from utils.exception_setup import ApplicationError
 from utils.logger_setup import get_logger
@@ -253,6 +254,7 @@ app.include_router(health.router)
 app.include_router(kt_search_router)
 app.include_router(kt_ingestion_router)
 app.include_router(kt_indexing_router)
+app.include_router(kt_pipeline_router)
 
 
 # ════════════════════════════════════════════════════════════════════════════
