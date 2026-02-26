@@ -7,7 +7,7 @@ exatamente quais vídeos entram na base de dados.
 Diferença em relação a run_full_pipeline.py:
     A Fase 1 (Ingestion) é substituída por um fluxo interativo:
     1. Lista todas as reuniões da conta TL:DV com status e nome
-    2. Usuário digita os números das reuniões desejadas
+    2. Usuário digita os números das reuniões desejadas (número único, lista separada por vírgula, intervalo "1-20" ou combinação)
     3. Confirmação antes de iniciar o download
     As Fases 2 (Indexação) e 3 (Validação) são idênticas ao pipeline completo.
 
@@ -102,7 +102,10 @@ class SelectivePipelineRunner:
         """Parseia a entrada do usuário e retorna índices 0-based válidos.
 
         Aceita:
+            - Número único: "1"
             - Números separados por vírgula: "1, 3, 4"
+            - Intervalo inclusivo: "1-20"
+            - Combinação mista: "1-5, 9, 12-15"
             - Palavra-chave "all" para selecionar todos
 
         Args:
@@ -110,7 +113,7 @@ class SelectivePipelineRunner:
             total: Total de reuniões disponíveis.
 
         Returns:
-            Lista de índices 0-based sem duplicatas, preservando a ordem.
+            Lista de índices 0-based sem duplicatas, preservando a ordem de entrada.
             None se a entrada contiver valores inválidos.
         """
         stripped = raw_input.strip().lower()
@@ -121,14 +124,29 @@ class SelectivePipelineRunner:
         indices: list[int] = []
         for part in stripped.split(","):
             part = part.strip()
-            if not part.isdigit():
-                print(f"  Valor inválido: '{part}' — digite apenas números inteiros.")
+            if "-" in part:
+                # Intervalo: "1-20"
+                bounds = part.split("-", maxsplit=1)
+                if len(bounds) != 2 or not bounds[0].isdigit() or not bounds[1].isdigit():
+                    print(f"  Intervalo inválido: '{part}' — use o formato 'início-fim' (ex: 1-20).")
+                    return None
+                start, end = int(bounds[0]), int(bounds[1])
+                if start < 1 or end > total:
+                    print(f"  Intervalo fora dos limites: '{part}' — válido de 1 a {total}.")
+                    return None
+                if start > end:
+                    print(f"  Intervalo invertido: '{part}' — o início deve ser menor ou igual ao fim.")
+                    return None
+                indices.extend(range(start - 1, end))  # Converter para índice 0-based
+            elif part.isdigit():
+                n = int(part)
+                if n < 1 or n > total:
+                    print(f"  Número fora do intervalo: {n} — válido de 1 a {total}.")
+                    return None
+                indices.append(n - 1)  # Converter para índice 0-based
+            else:
+                print(f"  Valor inválido: '{part}' — use números, intervalos (ex: 1-5) ou 'all'.")
                 return None
-            n = int(part)
-            if n < 1 or n > total:
-                print(f"  Número fora do intervalo: {n} — válido de 1 a {total}.")
-                return None
-            indices.append(n - 1)  # Converter para índice 0-based
 
         # Remover duplicatas mantendo ordem de seleção
         return list(dict.fromkeys(indices))
@@ -151,7 +169,7 @@ class SelectivePipelineRunner:
         self._display_meetings(meetings, existing_ids)
 
         while True:
-            print('Selecione os vídeos (ex: 1, 3, 4 | "all" para todos | "q" para sair):')
+            print('Selecione os vídeos (ex: 1, 3, 4 | 1-20 para intervalo | "all" para todos | "q" para sair):')
             raw = input("> ").strip()
 
             if raw.lower() == "q":
